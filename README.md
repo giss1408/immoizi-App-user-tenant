@@ -21,12 +21,5 @@ Default endpoint:
 
 ```text
 http://127.0.0.1:8000/graphql
-```
-
-For Android emulator, use:
-
-```text
-http://10.0.2.2:8000/graphql
-```
 
 The backend must provide an authenticated bearer token compatible with the Django GraphQL auth strategy.
