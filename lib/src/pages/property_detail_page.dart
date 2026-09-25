@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:immoizi_core/immoizi_core.dart';
 
+import '../models/dashboard.dart';
 import 'interest_request_page.dart';
 
 class PropertyDetailPage extends StatelessWidget {
@@ -9,12 +10,16 @@ class PropertyDetailPage extends StatelessWidget {
       required this.tag,
       required this.endpoint,
       required this.token,
+      this.openRequest,
+      this.onRequestSent,
       super.key});
 
   final Property property;
   final String tag;
   final String endpoint;
   final String token;
+  final InterestRequestItem? openRequest;
+  final VoidCallback? onRequestSent;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +53,11 @@ class PropertyDetailPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               PropertyDetails(
-                  property: property, endpoint: endpoint, token: token),
+                  property: property,
+                  endpoint: endpoint,
+                  token: token,
+                  openRequest: openRequest,
+                  onRequestSent: onRequestSent),
             ],
           ),
         ),
@@ -62,11 +71,17 @@ class PropertyDetails extends StatelessWidget {
       {required this.property,
       required this.endpoint,
       required this.token,
+      this.openRequest,
+      this.onRequestSent,
       super.key});
 
   final Property property;
   final String endpoint;
   final String token;
+
+  /// The tenant's unanswered request for this listing, if any.
+  final InterestRequestItem? openRequest;
+  final VoidCallback? onRequestSent;
 
   List<String> get _allImages => [
         if (property.mainImageUrl != null) property.mainImageUrl!,
@@ -167,19 +182,102 @@ class PropertyDetails extends StatelessWidget {
           VideoCard(videoUrl: property.videoUrl!, title: property.title),
         ],
         const SizedBox(height: 16),
+        InterestAction(
+            property: property,
+            endpoint: endpoint,
+            token: token,
+            openRequest: openRequest,
+            onRequestSent: onRequestSent),
+      ],
+    );
+  }
+}
+
+/// "Je suis intéressé" button, or the pending-request notice that replaces
+/// it: one open request per listing until the landlord answers or 6 days pass.
+class InterestAction extends StatefulWidget {
+  const InterestAction(
+      {required this.property,
+      required this.endpoint,
+      required this.token,
+      this.openRequest,
+      this.onRequestSent,
+      super.key});
+
+  final Property property;
+  final String endpoint;
+  final String token;
+  final InterestRequestItem? openRequest;
+  final VoidCallback? onRequestSent;
+
+  @override
+  State<InterestAction> createState() => _InterestActionState();
+}
+
+class _InterestActionState extends State<InterestAction> {
+  bool _sentNow = false;
+
+  Future<void> _openForm() async {
+    final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(
+        builder: (_) => InterestRequestPage(
+            property: widget.property,
+            endpoint: widget.endpoint,
+            token: widget.token)));
+    if (sent == true && mounted) {
+      setState(() => _sentNow = true);
+      widget.onRequestSent?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final request = widget.openRequest;
+    if (request != null || _sentNow) {
+      final sentOn = formatShortDate(request?.createdAt);
+      final retryOn = formatShortDate(request?.expiresAt);
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: IvoryColors.orange.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: IvoryColors.orange.withOpacity(0.35)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.hourglass_top, color: IvoryColors.orange),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    sentOn.isEmpty
+                        ? 'Demande envoyée'
+                        : 'Demande envoyée le $sentOn',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(
+                  retryOn.isEmpty
+                      ? 'En attente de la réponse du bailleur. Une seule demande par bien est possible à la fois.'
+                      : 'En attente de la réponse du bailleur. Vous pourrez envoyer une nouvelle demande après sa réponse, ou à partir du $retryOn.',
+                  style: const TextStyle(color: IvoryColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ]),
+      );
+    }
+
+    final signedIn = widget.token.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         FilledButton.icon(
-          onPressed: property.id == null || token.isEmpty
-              ? null
-              : () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => InterestRequestPage(
-                          property: property, endpoint: endpoint, token: token),
-                    ),
-                  ),
+          onPressed: widget.property.id == null || !signedIn ? null : _openForm,
           icon: const Icon(Icons.mark_email_unread),
           label: const Text('Je suis intéressé par ce bien'),
         ),
-        if (property.id != null && token.isEmpty)
+        if (widget.property.id != null && !signedIn)
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: MutedText(

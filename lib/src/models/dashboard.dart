@@ -23,6 +23,15 @@ class TenantDashboard {
   final List<InterestRequestItem> interestRequests;
   final List<NotificationItem> notifications;
 
+  /// The open request for a listing, which blocks sending another one.
+  InterestRequestItem? openRequestFor(String? propertyId) {
+    if (propertyId == null) return null;
+    for (final request in interestRequests) {
+      if (request.propertyId == propertyId && request.isOpen) return request;
+    }
+    return null;
+  }
+
   factory TenantDashboard.fromJson(Map<String, dynamic> json) {
     final me = json['me'] as Map<String, dynamic>? ?? {};
     final roles = [
@@ -191,16 +200,32 @@ class NotificationItem {
 }
 
 class InterestRequestItem {
-  InterestRequestItem(this.id, this.propertyTitle, this.status);
+  InterestRequestItem(this.id, this.propertyTitle, this.status,
+      {this.propertyId,
+      this.isExpired = false,
+      this.expiresAt,
+      this.createdAt});
 
   final String id;
   final String propertyTitle;
   final String status;
+  final String? propertyId;
+  final bool isExpired;
+  final String? expiresAt;
+  final String? createdAt;
+
+  /// Still waiting for the landlord, within the 6-day window.
+  bool get isOpen => isOpenInterestStatus(status, expired: isExpired);
 
   factory InterestRequestItem.fromJson(Map<String, dynamic> json) =>
       InterestRequestItem(
         json['id'] as String? ?? '',
         nestedTitle(json['property']),
         json['status'] as String? ?? '-',
+        propertyId:
+            (json['property'] as Map<String, dynamic>?)?['id'] as String?,
+        isExpired: json['isExpired'] as bool? ?? false,
+        expiresAt: json['expiresAt'] as String?,
+        createdAt: json['createdAt'] as String?,
       );
 }

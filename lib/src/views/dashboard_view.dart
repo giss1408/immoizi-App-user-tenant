@@ -41,7 +41,11 @@ class TenantDashboardView extends StatelessWidget {
         GroupedPropertyList(
           properties: availableProperties,
           cardBuilder: (property) => PropertyCard(property,
-              tag: 'Disponible', endpoint: endpoint, token: token),
+              tag: 'Disponible',
+              endpoint: endpoint,
+              token: token,
+              openRequest: dashboard.openRequestFor(property.id),
+              onRequestSent: onSubmitted),
         ),
       ],
     );
@@ -196,7 +200,12 @@ class PropertyCard extends StatelessWidget {
       {required this.tag,
       required this.endpoint,
       required this.token,
+      this.openRequest,
+      this.onRequestSent,
       super.key});
+
+  final InterestRequestItem? openRequest;
+  final VoidCallback? onRequestSent;
 
   final Property property;
   final String tag;
@@ -215,7 +224,9 @@ class PropertyCard extends StatelessWidget {
                 property: property,
                 tag: tag,
                 endpoint: endpoint,
-                token: token)),
+                token: token,
+                openRequest: openRequest,
+                onRequestSent: onRequestSent)),
       ),
     );
   }

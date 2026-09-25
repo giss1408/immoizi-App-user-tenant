@@ -16,7 +16,7 @@ query TenantDashboard($search: String) {
   myTenantPayments { amount status dueDate }
   myTenantDocuments { title documentType }
   myTenantMaintenanceRequests { title priority status }
-  myPropertyInterestRequests { id property { title } status }
+  myPropertyInterestRequests { id property { id title } status isExpired expiresAt createdAt }
   notifications { id title message isRead property { title } interestRequest { id } }
 }
 ''';

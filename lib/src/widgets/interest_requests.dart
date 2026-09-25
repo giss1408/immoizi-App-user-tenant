@@ -26,14 +26,16 @@ class InterestRequestTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = interestStatusColor(request.status);
+    final color =
+        interestStatusColor(request.status, expired: request.isExpired);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: const Icon(Icons.forum_outlined, color: IvoryColors.green),
         title: Text(request.propertyTitle,
             style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text(interestStatusLabel(request.status),
+        subtitle: Text(
+            interestStatusLabel(request.status, expired: request.isExpired),
             style: TextStyle(color: color, fontWeight: FontWeight.w700)),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => openInterestChat(context, request,

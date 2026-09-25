@@ -91,7 +91,7 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Votre demande a été envoyée au bailleur.')));
-        Navigator.of(context).pop();
+        Navigator.of(context).pop(true);
       }
     } catch (exception) {
       setState(() => error = 'Envoi impossible : ${describeError(exception)}');
