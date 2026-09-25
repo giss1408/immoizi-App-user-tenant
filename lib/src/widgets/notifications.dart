@@ -4,9 +4,11 @@ import 'package:immoizi_core/immoizi_core.dart';
 import '../models/dashboard.dart';
 
 class TenantUnreadNotificationBanner extends StatelessWidget {
-  const TenantUnreadNotificationBanner({required this.notification, super.key});
+  const TenantUnreadNotificationBanner(
+      {required this.notification, this.onTap, super.key});
 
   final NotificationItem notification;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -21,14 +23,19 @@ class TenantUnreadNotificationBanner extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis),
           isThreeLine: true,
+          onTap: onTap,
+          trailing: const Icon(Icons.chevron_right),
         ),
       );
 }
 
 class NotificationTile extends StatelessWidget {
-  const NotificationTile(this.notification, {super.key});
+  const NotificationTile(this.notification, {this.onTap, super.key});
 
   final NotificationItem notification;
+
+  /// Marks the notification read and opens the related conversation.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -46,6 +53,10 @@ class NotificationTile extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis),
           isThreeLine: true,
+          onTap: onTap,
+          trailing: notification.isRead
+              ? null
+              : const Icon(Icons.circle, size: 10, color: IvoryColors.orange),
         ),
       );
 }

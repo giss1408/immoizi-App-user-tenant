@@ -17,7 +17,7 @@ query TenantDashboard($search: String) {
   myTenantDocuments { title documentType }
   myTenantMaintenanceRequests { title priority status }
   myPropertyInterestRequests { id property { title } status }
-  notifications { id title message isRead property { title } }
+  notifications { id title message isRead property { title } interestRequest { id } }
 }
 ''';
 

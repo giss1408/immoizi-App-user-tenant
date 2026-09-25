@@ -179,6 +179,12 @@ class PropertyDetails extends StatelessWidget {
           icon: const Icon(Icons.mark_email_unread),
           label: const Text('Je suis intéressé par ce bien'),
         ),
+        if (property.id != null && token.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: MutedText(
+                'Connectez-vous dans « Mon espace » pour envoyer une demande au bailleur.'),
+          ),
       ],
     );
   }

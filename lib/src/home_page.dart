@@ -47,9 +47,13 @@ class _TenantHomePageState extends State<TenantHomePage>
   TenantDashboard demoDashboard() => TenantDashboard.demo();
 
   @override
-  Iterable<({String id, bool isRead})> notificationKeys(
-          TenantDashboard dashboard) =>
-      dashboard.notifications.map((item) => (id: item.id, isRead: item.isRead));
+  Iterable<AppNotification> notificationsOf(TenantDashboard dashboard) =>
+      dashboard.notifications.map((item) => AppNotification(
+          id: item.id,
+          title: item.title,
+          message: item.message,
+          isRead: item.isRead,
+          interestRequestId: item.interestRequestId));
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +152,17 @@ class _TenantHomePageState extends State<TenantHomePage>
     );
   }
 
+  void _openNotification(NotificationItem notification) {
+    if (!notification.isRead) markNotificationRead(notification.id);
+    for (final request in dashboard.interestRequests) {
+      if (request.id == notification.interestRequestId) {
+        openInterestChat(context, request,
+            endpoint: endpoint.text.trim(), token: token.text.trim());
+        return;
+      }
+    }
+  }
+
   List<Widget> _mySpace() {
     final endpointValue = endpoint.text.trim();
     final tokenValue = token.text.trim();
@@ -168,7 +183,9 @@ class _TenantHomePageState extends State<TenantHomePage>
       if (dashboard.notifications.any((item) => !item.isRead))
         TenantUnreadNotificationBanner(
             notification:
-                dashboard.notifications.firstWhere((item) => !item.isRead)),
+                dashboard.notifications.firstWhere((item) => !item.isRead),
+            onTap: () => _openNotification(
+                dashboard.notifications.firstWhere((item) => !item.isRead))),
       const SizedBox(height: 12),
       CategorySection(
           title: 'Mes biens loués',
@@ -204,7 +221,12 @@ class _TenantHomePageState extends State<TenantHomePage>
           title: 'Notifications',
           icon: Icons.notifications_none,
           count: dashboard.notifications.length,
-          children: dashboard.notifications.map(NotificationTile.new).toList()),
+          initiallyExpanded:
+              dashboard.notifications.any((item) => !item.isRead),
+          children: dashboard.notifications
+              .map((item) =>
+                  NotificationTile(item, onTap: () => _openNotification(item)))
+              .toList()),
       CategorySection(
           title: "Mes demandes d'intérêt",
           icon: Icons.forum_outlined,

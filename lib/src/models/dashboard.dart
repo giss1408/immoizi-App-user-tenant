@@ -166,7 +166,11 @@ class Maintenance {
 
 class NotificationItem {
   NotificationItem(
-      this.id, this.title, this.message, this.propertyTitle, this.isRead);
+      this.id, this.title, this.message, this.propertyTitle, this.isRead,
+      {this.interestRequestId});
+
+  /// Set when the notification is about an interest request.
+  final String? interestRequestId;
 
   final String id;
   final String title;
@@ -181,6 +185,8 @@ class NotificationItem {
         json['message'] as String? ?? '',
         nestedTitle(json['property']),
         json['isRead'] as bool? ?? false,
+        interestRequestId: (json['interestRequest']
+            as Map<String, dynamic>?)?['id'] as String?,
       );
 }
 
@@ -195,15 +201,6 @@ class InterestRequestItem {
       InterestRequestItem(
         json['id'] as String? ?? '',
         nestedTitle(json['property']),
-        _interestStatus(json['status']),
+        json['status'] as String? ?? '-',
       );
 }
-
-String _interestStatus(Object? value) =>
-    const {
-      'PENDING': 'En attente',
-      'REVIEWING': 'En cours d’examen',
-      'ACCEPTED': 'Acceptée',
-      'REJECTED': 'Refusée',
-    }['${value ?? ''}'] ??
-    '${value ?? '-'}';
