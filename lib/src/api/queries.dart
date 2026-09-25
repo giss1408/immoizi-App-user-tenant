@@ -1,3 +1,13 @@
+const _propertyFields =
+    'id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl';
+
+/// Public listings only, for visitors who are not signed in.
+const publicListingsQuery = '''
+query PublicListings(\$search: String) {
+  publicDescriptions(first: 10, search: \$search) { $_propertyFields }
+}
+''';
+
 const tenantQuery = r'''
 query TenantDashboard($search: String) {
   me { username isSeeker isTenant }

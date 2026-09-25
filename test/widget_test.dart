@@ -70,7 +70,20 @@ void main() {
   });
 
   testWidgets('loads public listings without signing in', (tester) async {
-    final backend = FakeBackend((_, __) => _json({'data': _dashboard()}));
+    // Like the real backend: touching a protected field without a token
+    // fails the whole response.
+    final backend = FakeBackend((body, request) {
+      final query = body['query'] as String;
+      if (!request.headers.containsKey('Authorization') &&
+          query.contains('myTenant')) {
+        return _json({
+          'errors': [
+            {'message': "L'authentification est obligatoire."}
+          ]
+        });
+      }
+      return _json({'data': _dashboard()});
+    });
     await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
     await tester.pumpAndSettle();
 

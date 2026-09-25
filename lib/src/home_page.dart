@@ -32,6 +32,8 @@ class _TenantHomePageState extends State<TenantHomePage>
   @override
   final dashboardQuery = tenantQuery;
   @override
+  final signedOutQuery = publicListingsQuery;
+  @override
   final requiresLogin = false;
 
   PropertyFilters filters = const PropertyFilters();
@@ -92,6 +94,7 @@ class _TenantHomePageState extends State<TenantHomePage>
                 : 'Recherche & espace locataire',
             icon: onMySpace ? Icons.person : Icons.real_estate_agent,
             connected: connected,
+            online: online,
             connectedLabel: username.text.trim(),
             loading: loading,
             onRefresh: load,
