@@ -43,6 +43,7 @@ class _TenantHomePageState extends State<TenantHomePage> {
   final token = TextEditingController();
   final username = TextEditingController(text: 'tenant_demo');
   final password = TextEditingController(text: 'DemoPass123!');
+  final propertySearch = TextEditingController();
   final client = GraphQLClient();
   TenantDashboard dashboard = TenantDashboard.demo();
   bool loading = false;
@@ -52,6 +53,9 @@ class _TenantHomePageState extends State<TenantHomePage> {
   DateTime? lastSynced;
   String? error;
   Timer? notificationTimer;
+  Timer? searchDebounce;
+  String searchQuery = '';
+  PropertyFilters filters = const PropertyFilters();
 
   @override
   void initState() {
@@ -68,6 +72,8 @@ class _TenantHomePageState extends State<TenantHomePage> {
     token.dispose();
     username.dispose();
     password.dispose();
+    propertySearch.dispose();
+    searchDebounce?.cancel();
     notificationTimer?.cancel();
     super.dispose();
   }
@@ -83,7 +89,9 @@ class _TenantHomePageState extends State<TenantHomePage> {
       setState(() {
         dashboard = TenantDashboard.fromJson(data);
         hasData = true;
-        lastSynced = cachedAtMs != null ? DateTime.fromMillisecondsSinceEpoch(cachedAtMs) : null;
+        lastSynced = cachedAtMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(cachedAtMs)
+            : null;
       });
     } catch (_) {
       // Corrupt or outdated cache format — ignore and keep the demo fallback.
@@ -106,11 +114,13 @@ class _TenantHomePageState extends State<TenantHomePage> {
 
     try {
       final endpointValue = endpoint.text.trim();
-      final newToken = await client.login(endpointValue, username.text.trim(), password.text.trim());
+      final newToken = await client.login(
+          endpointValue, username.text.trim(), password.text.trim());
       token.text = newToken;
       await load();
     } catch (_) {
-      setState(() => error = 'Connexion échouée — vérifiez vos identifiants ou le backend.');
+      setState(() => error =
+          'Connexion échouée — vérifiez vos identifiants ou le backend.');
     } finally {
       if (mounted) {
         setState(() => loggingIn = false);
@@ -124,7 +134,7 @@ class _TenantHomePageState extends State<TenantHomePage> {
     load();
   }
 
-  Future<void> load() async {
+  Future<void> load({String? search}) async {
     setState(() {
       loading = true;
       error = null;
@@ -136,7 +146,13 @@ class _TenantHomePageState extends State<TenantHomePage> {
         throw Exception('Endpoint vide');
       }
 
-      final data = await client.query(endpointValue, token.text.trim(), tenantQuery);
+      final activeSearch = (search ?? searchQuery).trim();
+      final data = await client.query(
+        endpointValue,
+        token.text.trim(),
+        tenantQuery,
+        variables: {'search': activeSearch.isEmpty ? null : activeSearch},
+      );
       setState(() {
         dashboard = TenantDashboard.fromJson(data);
         connected = token.text.trim().isNotEmpty;
@@ -150,7 +166,8 @@ class _TenantHomePageState extends State<TenantHomePage> {
           dashboard = TenantDashboard.demo();
           error = 'Backend indisponible — mode démonstration activé';
         } else {
-          error = 'Synchronisation impossible — dernières données en cache affichées';
+          error =
+              'Synchronisation impossible — dernières données en cache affichées';
         }
       });
     } finally {
@@ -158,6 +175,15 @@ class _TenantHomePageState extends State<TenantHomePage> {
         setState(() => loading = false);
       }
     }
+  }
+
+  void _searchProperties(String value) {
+    setState(() => searchQuery = value);
+    searchDebounce?.cancel();
+    if (token.text.trim().isEmpty) return;
+    searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) load(search: value);
+    });
   }
 
   @override
@@ -186,22 +212,17 @@ class _TenantHomePageState extends State<TenantHomePage> {
                 icon: Icons.real_estate_agent,
                 connected: connected,
                 connectedLabel: username.text.trim(),
+                onOpenMore: _showMoreTools,
+              ),
+              const SizedBox(height: 14),
+              PropertySearchBar(
+                controller: propertySearch,
+                onChanged: _searchProperties,
+                activeFilterCount: filters.activeCount,
+                onOpenFilters: _showFilters,
               ),
               const SizedBox(height: 12),
               CacheStatusBar(lastSynced: lastSynced, loading: loading),
-              const SizedBox(height: 12),
-              ConnectionCard(
-                endpoint: endpoint,
-                token: token,
-                username: username,
-                password: password,
-                loading: loading,
-                loggingIn: loggingIn,
-                connected: connected,
-                onPressed: load,
-                onLogin: login,
-                onLogout: logout,
-              ),
               if (error != null) ...[
                 const SizedBox(height: 12),
                 ErrorCard(error!),
@@ -209,6 +230,8 @@ class _TenantHomePageState extends State<TenantHomePage> {
               const SizedBox(height: 18),
               TenantDashboardView(
                 dashboard,
+                searchQuery: searchQuery,
+                filters: filters,
                 endpoint: endpoint.text.trim(),
                 token: token.text.trim(),
                 onSubmitted: load,
@@ -219,6 +242,117 @@ class _TenantHomePageState extends State<TenantHomePage> {
       ),
     );
   }
+
+  void _showMoreTools() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mon espace',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              const Text('Suivi, paiements et actions locataires.',
+                  style: TextStyle(color: Colors.black54)),
+              const SizedBox(height: 14),
+              ConnectionCard(
+                  endpoint: endpoint,
+                  token: token,
+                  username: username,
+                  password: password,
+                  loading: loading,
+                  loggingIn: loggingIn,
+                  connected: connected,
+                  onPressed: load,
+                  onLogin: login,
+                  onLogout: logout),
+              ProfileCard(name: dashboard.username, role: dashboard.roleText),
+              SummaryRow(dashboard: dashboard),
+              if (dashboard.notifications.any((item) => !item.isRead))
+                TenantUnreadNotificationBanner(
+                    notification: dashboard.notifications
+                        .firstWhere((item) => !item.isRead)),
+              CategorySection(
+                  title: 'Mes biens loués',
+                  icon: Icons.key,
+                  count: dashboard.tenantProperties.length,
+                  children:
+                      groupPropertiesByCategory(dashboard.tenantProperties)
+                          .entries
+                          .map((entry) => PropertyCategoryGroup(
+                              category: entry.key,
+                              properties: entry.value,
+                              tag: 'Loué',
+                              endpoint: endpoint.text.trim(),
+                              token: token.text.trim()))
+                          .toList()),
+              CategorySection(
+                  title: 'Paiements',
+                  icon: Icons.receipt_long,
+                  count: dashboard.payments.length,
+                  children: dashboard.payments.map(PaymentTile.new).toList()),
+              CategorySection(
+                  title: 'Documents',
+                  icon: Icons.description,
+                  count: dashboard.documents.length,
+                  children: dashboard.documents.map(DocumentTile.new).toList()),
+              CategorySection(
+                  title: 'Maintenance',
+                  icon: Icons.build,
+                  count: dashboard.maintenance.length,
+                  children: [
+                    ...dashboard.maintenance.map(MaintenanceTile.new),
+                    CreateMaintenanceCard(
+                        properties: dashboard.tenantProperties,
+                        endpoint: endpoint.text.trim(),
+                        token: token.text.trim(),
+                        onSubmitted: load)
+                  ]),
+              CategorySection(
+                  title: 'Notifications',
+                  icon: Icons.notifications_none,
+                  count: dashboard.notifications.length,
+                  children: dashboard.notifications
+                      .map(NotificationTile.new)
+                      .toList()),
+              CategorySection(
+                  title: "Mes demandes d'intérêt",
+                  icon: Icons.forum_outlined,
+                  count: dashboard.interestRequests.length,
+                  children: dashboard.interestRequests
+                      .map((item) => InterestRequestTile(item,
+                          endpoint: endpoint.text.trim(),
+                          token: token.text.trim()))
+                      .toList()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFilters() async {
+    final result = await showModalBottomSheet<PropertyFilters>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => PropertyFilterSheet(
+            initial: filters,
+            categories: dashboard.publicProperties
+                .map((property) => property.category)
+                .toSet()
+                .toList()
+              ..sort()));
+    if (result != null && mounted) setState(() => filters = result);
+  }
 }
 
 class TenantDashboardView extends StatelessWidget {
@@ -227,6 +361,8 @@ class TenantDashboardView extends StatelessWidget {
     required this.endpoint,
     required this.token,
     required this.onSubmitted,
+    this.searchQuery = '',
+    this.filters = const PropertyFilters(),
     super.key,
   });
 
@@ -234,93 +370,36 @@ class TenantDashboardView extends StatelessWidget {
   final String endpoint;
   final String token;
   final VoidCallback onSubmitted;
+  final String searchQuery;
+  final PropertyFilters filters;
 
   @override
   Widget build(BuildContext context) {
+    final query = searchQuery.trim().toLowerCase();
+    final availableProperties = dashboard.publicProperties.where((property) {
+      final matchesSearch = query.isEmpty ||
+          property.title.toLowerCase().contains(query) ||
+          property.city.toLowerCase().contains(query) ||
+          property.district.toLowerCase().contains(query);
+      return matchesSearch && filters.matches(property);
+    }).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ProfileCard(name: dashboard.username, role: dashboard.roleText),
-        if (dashboard.notifications.any((item) => !item.isRead)) ...[
-          const SizedBox(height: 12),
-          TenantUnreadNotificationBanner(
-            notification: dashboard.notifications.firstWhere((item) => !item.isRead),
-          ),
-        ],
-        const SizedBox(height: 18),
-        SummaryRow(dashboard: dashboard),
-        const SizedBox(height: 18),
         CategorySection(
           title: 'Biens disponibles',
           icon: Icons.home_work,
-          count: dashboard.publicProperties.length,
+          count: availableProperties.length,
           initiallyExpanded: true,
-          children: groupPropertiesByCategory(dashboard.publicProperties)
+          children: groupPropertiesByCategory(availableProperties)
               .entries
               .map((entry) => PropertyCategoryGroup(
                     category: entry.key,
                     properties: entry.value,
                     tag: 'Disponibilité',
-                  endpoint: endpoint,
-                  token: token,
+                    endpoint: endpoint,
+                    token: token,
                   ))
-              .toList(),
-        ),
-        CategorySection(
-          title: 'Mes biens loués',
-          icon: Icons.key,
-          count: dashboard.tenantProperties.length,
-          children: groupPropertiesByCategory(dashboard.tenantProperties)
-              .entries
-              .map((entry) => PropertyCategoryGroup(
-                    category: entry.key,
-                    properties: entry.value,
-                    tag: 'Loué',
-                  endpoint: endpoint,
-                  token: token,
-                  ))
-              .toList(),
-        ),
-        CategorySection(
-          title: 'Paiements',
-          icon: Icons.receipt_long,
-          count: dashboard.payments.length,
-          children: dashboard.payments.map(PaymentTile.new).toList(),
-        ),
-        CategorySection(
-          title: 'Documents',
-          icon: Icons.description,
-          count: dashboard.documents.length,
-          children: dashboard.documents.map(DocumentTile.new).toList(),
-        ),
-        CategorySection(
-          title: 'Maintenance',
-          icon: Icons.build,
-          count: dashboard.maintenance.length,
-          children: [
-            ...dashboard.maintenance.map(MaintenanceTile.new),
-            CreateMaintenanceCard(
-              properties: dashboard.tenantProperties,
-              endpoint: endpoint,
-              token: token,
-              onSubmitted: onSubmitted,
-            ),
-          ],
-        ),
-        CategorySection(
-          title: 'Notifications',
-          icon: Icons.notifications_none,
-          count: dashboard.notifications.length,
-          initiallyExpanded: dashboard.notifications.isNotEmpty,
-          children: dashboard.notifications.map(NotificationTile.new).toList(),
-        ),
-        CategorySection(
-          title: "Mes demandes d'intérêt",
-          icon: Icons.forum_outlined,
-          count: dashboard.interestRequests.length,
-          initiallyExpanded: dashboard.interestRequests.isNotEmpty,
-          children: dashboard.interestRequests
-              .map((item) => InterestRequestTile(item, endpoint: endpoint, token: token))
               .toList(),
         ),
       ],
@@ -328,7 +407,8 @@ class TenantDashboardView extends StatelessWidget {
   }
 }
 
-Map<String, List<Property>> groupPropertiesByCategory(List<Property> properties) {
+Map<String, List<Property>> groupPropertiesByCategory(
+    List<Property> properties) {
   final grouped = <String, List<Property>>{};
   for (final property in properties) {
     grouped.putIfAbsent(property.category, () => []).add(property);
@@ -341,7 +421,8 @@ class AppTheme {
     return ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: seed),
       scaffoldBackgroundColor: background,
-      cardTheme: const CardTheme(elevation: 0, color: Colors.white, margin: EdgeInsets.zero),
+      cardTheme: const CardTheme(
+          elevation: 0, color: Colors.white, margin: EdgeInsets.zero),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
@@ -355,7 +436,8 @@ class AppTheme {
           backgroundColor: IvoryColors.green,
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -363,7 +445,8 @@ class AppTheme {
           foregroundColor: IvoryColors.orange,
           side: const BorderSide(color: IvoryColors.orange),
           minimumSize: const Size.fromHeight(48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       useMaterial3: true,
@@ -378,6 +461,7 @@ class AppHeader extends StatelessWidget {
     required this.icon,
     this.connected = false,
     this.connectedLabel = '',
+    this.onOpenMore,
     super.key,
   });
 
@@ -386,58 +470,51 @@ class AppHeader extends StatelessWidget {
   final IconData icon;
   final bool connected;
   final String connectedLabel;
+  final VoidCallback? onOpenMore;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [IvoryColors.green, Color(0xFF00733A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 3))
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: const BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.all(Radius.circular(18)),
-                ),
-                child: Icon(icon, color: Colors.white),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+                color: IvoryColors.background,
+                borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: IvoryColors.green),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+                Text(title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w900)),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+              ])),
           ConnectionStatusPill(connected: connected, label: connectedLabel),
+          if (onOpenMore != null)
+            IconButton(
+              onPressed: onOpenMore,
+              icon: const Icon(Icons.more_horiz),
+              tooltip: 'Mon espace',
+            ),
         ],
       ),
     );
@@ -445,7 +522,8 @@ class AppHeader extends StatelessWidget {
 }
 
 class ConnectionStatusPill extends StatelessWidget {
-  const ConnectionStatusPill({required this.connected, required this.label, super.key});
+  const ConnectionStatusPill(
+      {required this.connected, required this.label, super.key});
 
   final bool connected;
   final String label;
@@ -523,7 +601,10 @@ class AppBottomBar extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 connected ? 'Connect\u00e9' : 'Mode d\u00e9mo',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54),
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black54),
               ),
             ],
           ),
@@ -583,8 +664,14 @@ class AppDrawer extends StatelessWidget {
                     child: Icon(Icons.person, color: Colors.white),
                   ),
                   const SizedBox(height: 10),
-                  Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                  Text(role, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(name,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16)),
+                  Text(role,
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12)),
                   const SizedBox(height: 8),
                   ConnectionStatusPill(connected: connected, label: name),
                 ],
@@ -599,13 +686,19 @@ class AppDrawer extends StatelessWidget {
                     title: const Text('Accueil'),
                     onTap: () => Navigator.of(context).pop(),
                   ),
-                  const DrawerComingSoonTile(icon: Icons.notifications_none, title: 'Notifications'),
-                  const DrawerComingSoonTile(icon: Icons.translate, title: 'Langue (FR / EN)'),
-                  const DrawerComingSoonTile(icon: Icons.support_agent, title: 'Aide & support'),
-                  const DrawerComingSoonTile(icon: Icons.privacy_tip_outlined, title: 'Confidentialit\u00e9 & conditions'),
+                  const DrawerComingSoonTile(
+                      icon: Icons.notifications_none, title: 'Notifications'),
+                  const DrawerComingSoonTile(
+                      icon: Icons.translate, title: 'Langue (FR / EN)'),
+                  const DrawerComingSoonTile(
+                      icon: Icons.support_agent, title: 'Aide & support'),
+                  const DrawerComingSoonTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: 'Confidentialit\u00e9 & conditions'),
                   const Divider(),
                   ListTile(
-                    leading: const Icon(Icons.info_outline, color: IvoryColors.green),
+                    leading: const Icon(Icons.info_outline,
+                        color: IvoryColors.green),
                     title: const Text('\u00c0 propos'),
                     onTap: () {
                       Navigator.of(context).pop();
@@ -613,7 +706,8 @@ class AppDrawer extends StatelessWidget {
                         context: context,
                         applicationName: 'Immoizi',
                         applicationVersion: '1.0.0',
-                        applicationLegalese: '\u00a9 Immoizi \u2014 C\u00f4te d\u2019Ivoire',
+                        applicationLegalese:
+                            '\u00a9 Immoizi \u2014 C\u00f4te d\u2019Ivoire',
                       );
                     },
                   ),
@@ -636,7 +730,8 @@ class AppDrawer extends StatelessWidget {
 }
 
 class DrawerComingSoonTile extends StatelessWidget {
-  const DrawerComingSoonTile({required this.icon, required this.title, super.key});
+  const DrawerComingSoonTile(
+      {required this.icon, required this.title, super.key});
 
   final IconData icon;
   final String title;
@@ -653,8 +748,245 @@ class DrawerComingSoonTile extends StatelessWidget {
           color: IvoryColors.orange.withOpacity(0.12),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Text('Bient\u00f4t', style: TextStyle(fontSize: 11, color: IvoryColors.orange, fontWeight: FontWeight.w700)),
+        child: const Text('Bient\u00f4t',
+            style: TextStyle(
+                fontSize: 11,
+                color: IvoryColors.orange,
+                fontWeight: FontWeight.w700)),
       ),
+    );
+  }
+}
+
+class PropertyFilters {
+  const PropertyFilters(
+      {this.location = '',
+      this.priceRange = const RangeValues(0, 5000000),
+      this.minRooms = 0,
+      this.minSurface = 0,
+      this.categories = const {}});
+
+  final String location;
+  final RangeValues priceRange;
+  final int minRooms;
+  final int minSurface;
+  final Set<String> categories;
+
+  int get activeCount =>
+      (location.trim().isNotEmpty ? 1 : 0) +
+      (priceRange.start > 0 ? 1 : 0) +
+      (priceRange.end < 5000000 ? 1 : 0) +
+      (minRooms > 0 ? 1 : 0) +
+      (minSurface > 0 ? 1 : 0) +
+      (categories.isNotEmpty ? 1 : 0);
+  bool matches(Property property) {
+    final query = location.trim().toLowerCase();
+    return (query.isEmpty ||
+            property.city.toLowerCase().contains(query) ||
+            property.district.toLowerCase().contains(query)) &&
+        property.price >= priceRange.start &&
+        property.price <= priceRange.end &&
+        property.rooms >= minRooms &&
+        property.surface >= minSurface &&
+        (categories.isEmpty || categories.contains(property.category));
+  }
+}
+
+class PropertyFilterSheet extends StatefulWidget {
+  const PropertyFilterSheet(
+      {required this.initial, required this.categories, super.key});
+  final PropertyFilters initial;
+  final List<String> categories;
+  @override
+  State<PropertyFilterSheet> createState() => _PropertyFilterSheetState();
+}
+
+class _PropertyFilterSheetState extends State<PropertyFilterSheet> {
+  late final TextEditingController locationController =
+      TextEditingController(text: widget.initial.location);
+  late RangeValues priceRange = widget.initial.priceRange;
+  late int minRooms = widget.initial.minRooms;
+  late int minSurface = widget.initial.minSurface;
+  late Set<String> categories = {...widget.initial.categories};
+  void reset() => setState(() {
+        locationController.clear();
+        priceRange = const RangeValues(0, 5000000);
+        minRooms = 0;
+        minSurface = 0;
+        categories = {};
+      });
+
+  @override
+  void dispose() {
+    locationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+      child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Filtres',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w900)),
+              TextButton(onPressed: reset, child: const Text('Réinitialiser'))
+            ]),
+            const Text('Affinez les biens disponibles.',
+                style: TextStyle(color: Colors.black54)),
+            const SizedBox(height: 20),
+            TextField(
+                controller: locationController,
+                decoration: const InputDecoration(
+                    labelText: 'Localisation',
+                    hintText: 'Ville ou quartier',
+                    prefixIcon: Icon(Icons.location_on_outlined))),
+            const SizedBox(height: 14),
+            Text(
+                'Budget mensuel: ${priceRange.start.round()} - ${priceRange.end.round()} FCFA',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+            RangeSlider(
+                values: priceRange,
+                min: 0,
+                max: 5000000,
+                divisions: 100,
+                activeColor: IvoryColors.orange,
+                labels: RangeLabels(
+                    '${priceRange.start.round()}', '${priceRange.end.round()}'),
+                onChanged: (value) => setState(() => priceRange = value)),
+            const SizedBox(height: 12),
+            _FilterStepper(
+                label: 'Pièces minimum',
+                value: minRooms,
+                onChanged: (value) => setState(() => minRooms = value)),
+            _FilterStepper(
+                label: 'Surface minimum',
+                suffix: ' m²',
+                value: minSurface,
+                step: 10,
+                onChanged: (value) => setState(() => minSurface = value)),
+            if (widget.categories.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              const Text('Types de biens',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: widget.categories.map((category) {
+                  return FilterChip(
+                    label: Text(category),
+                    selected: categories.contains(category),
+                    selectedColor: IvoryColors.orange.withOpacity(.2),
+                    onSelected: (selected) => setState(() {
+                      if (selected) {
+                        categories.add(category);
+                      } else {
+                        categories.remove(category);
+                      }
+                    }),
+                  );
+                }).toList(),
+              ),
+            ],
+            const SizedBox(height: 22),
+            SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                    onPressed: () => Navigator.pop(
+                        context,
+                        PropertyFilters(
+                            location: locationController.text,
+                            priceRange: priceRange,
+                            minRooms: minRooms,
+                            minSurface: minSurface,
+                            categories: categories)),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Appliquer les filtres'))),
+          ])));
+}
+
+class _FilterStepper extends StatelessWidget {
+  const _FilterStepper(
+      {required this.label,
+      required this.value,
+      required this.onChanged,
+      this.step = 1,
+      this.suffix = ''});
+  final String label, suffix;
+  final int value, step;
+  final ValueChanged<int> onChanged;
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Expanded(child: Text('$label: $value$suffix')),
+        IconButton(
+            onPressed: value > 0 ? () => onChanged(value - step) : null,
+            icon: const Icon(Icons.remove_circle_outline)),
+        Text('$value'),
+        IconButton(
+            onPressed: () => onChanged(value + step),
+            icon: const Icon(Icons.add_circle_outline))
+      ]);
+}
+
+class PropertySearchBar extends StatelessWidget {
+  const PropertySearchBar(
+      {required this.controller,
+      required this.onChanged,
+      required this.onOpenFilters,
+      this.activeFilterCount = 0,
+      super.key});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onOpenFilters;
+  final int activeFilterCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              hintText: 'Rechercher un bien...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: controller.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        controller.clear();
+                        onChanged('');
+                      },
+                    ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(32),
+                  borderSide: BorderSide.none),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        DecoratedBox(
+          decoration: BoxDecoration(
+              color: IvoryColors.orange,
+              borderRadius: BorderRadius.circular(32)),
+          child: IconButton(
+              onPressed: onOpenFilters,
+              icon: Badge(
+                  isLabelVisible: activeFilterCount > 0,
+                  label: Text('$activeFilterCount'),
+                  child: const Icon(Icons.tune, color: Colors.white))),
+        ),
+      ],
     );
   }
 }
@@ -714,17 +1046,25 @@ class _ConnectionCardState extends State<ConnectionCard> {
               child: Row(
                 children: [
                   Icon(
-                    widget.connected ? Icons.check_circle : Icons.wifi_tethering,
-                    color: widget.connected ? IvoryColors.green : IvoryColors.orange,
+                    widget.connected
+                        ? Icons.check_circle
+                        : Icons.wifi_tethering,
+                    color: widget.connected
+                        ? IvoryColors.green
+                        : IvoryColors.orange,
                     size: 20,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      widget.connected ? 'Connect\u00e9 en tant que ${widget.username.text.trim()}' : 'Connexion au backend',
+                      widget.connected
+                          ? 'Connect\u00e9 en tant que ${widget.username.text.trim()}'
+                          : 'Connexion au backend',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        color: widget.connected ? IvoryColors.green : Colors.black87,
+                        color: widget.connected
+                            ? IvoryColors.green
+                            : Colors.black87,
                       ),
                     ),
                   ),
@@ -734,7 +1074,8 @@ class _ConnectionCardState extends State<ConnectionCard> {
                       icon: const Icon(Icons.logout, size: 16),
                       label: const Text('D\u00e9connexion'),
                     ),
-                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: Colors.black45),
+                  Icon(expanded ? Icons.expand_less : Icons.expand_more,
+                      color: Colors.black45),
                 ],
               ),
             ),
@@ -788,7 +1129,11 @@ class _ConnectionCardState extends State<ConnectionCard> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.login),
-                    label: Text(widget.loggingIn ? 'Connexion...' : (widget.connected ? 'Se reconnecter' : 'Se connecter')),
+                    label: Text(widget.loggingIn
+                        ? 'Connexion...'
+                        : (widget.connected
+                            ? 'Se reconnecter'
+                            : 'Se connecter')),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -809,7 +1154,8 @@ class _ConnectionCardState extends State<ConnectionCard> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.refresh),
-                    label: Text(widget.loading ? 'Chargement...' : 'Synchroniser'),
+                    label:
+                        Text(widget.loading ? 'Chargement...' : 'Synchroniser'),
                   ),
                 ],
               ),
@@ -893,15 +1239,20 @@ class MetricChip extends StatelessWidget {
               color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+            child: Icon(icon,
+                size: 18, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                Text(value,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 18)),
+                Text(label,
+                    style:
+                        const TextStyle(fontSize: 11, color: Colors.black54)),
               ],
             ),
           ),
@@ -939,8 +1290,8 @@ class ProfileCard extends StatelessWidget {
                   Text(
                     name,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                          fontWeight: FontWeight.w800,
+                        ),
                   ),
                   const SizedBox(height: 4),
                   Text(role, style: const TextStyle(color: Colors.black54)),
@@ -1004,11 +1355,15 @@ class CategorySection extends StatelessWidget {
               ),
               child: Icon(icon, color: Theme.of(context).colorScheme.primary),
             ),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            title: Text(title,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Chip(label: Text('$count'), visualDensity: VisualDensity.compact),
+                Chip(
+                    label: Text('$count'),
+                    visualDensity: VisualDensity.compact),
                 const Icon(Icons.expand_more),
               ],
             ),
@@ -1056,14 +1411,22 @@ class PropertyCategoryGroup extends StatelessWidget {
           initiallyExpanded: true,
           title: Row(
             children: [
-              Icon(Icons.label, size: 16, color: Theme.of(context).colorScheme.primary),
+              Icon(Icons.label,
+                  size: 16, color: Theme.of(context).colorScheme.primary),
               const SizedBox(width: 6),
-              Text(category, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              Text(category,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 14)),
               const SizedBox(width: 8),
-              Chip(label: Text('${properties.length}'), visualDensity: VisualDensity.compact),
+              Chip(
+                  label: Text('${properties.length}'),
+                  visualDensity: VisualDensity.compact),
             ],
           ),
-          children: properties.map((item) => PropertyCard(item, tag: tag, endpoint: endpoint, token: token)).toList(),
+          children: properties
+              .map((item) => PropertyCard(item,
+                  tag: tag, endpoint: endpoint, token: token))
+              .toList(),
         ),
       ),
     );
@@ -1071,7 +1434,11 @@ class PropertyCategoryGroup extends StatelessWidget {
 }
 
 class PropertyCard extends StatelessWidget {
-  const PropertyCard(this.property, {required this.tag, required this.endpoint, required this.token, super.key});
+  const PropertyCard(this.property,
+      {required this.tag,
+      required this.endpoint,
+      required this.token,
+      super.key});
 
   final Property property;
   final String tag;
@@ -1085,62 +1452,111 @@ class PropertyCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => PropertyDetailPage(property: property, tag: tag, endpoint: endpoint, token: token)),
+          MaterialPageRoute(
+              builder: (_) => PropertyDetailPage(
+                  property: property,
+                  tag: tag,
+                  endpoint: endpoint,
+                  token: token)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFF0E0), Color(0xFFFFD9B3)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(Icons.apartment, color: IvoryColors.orange),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(property.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 4),
-                    Text('${property.city} \u2022 ${property.district}', style: const TextStyle(color: Colors.black54)),
-                    const SizedBox(height: 4),
-                    Text('${property.rooms} pi\u00e8ces \u2022 ${property.surface} m\u00b2', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                    if (property.isTestData) ...[
-                      const SizedBox(height: 6),
-                      const TestDataBadge(),
-                    ],
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          children: [
+            if (property.mainImageUrl != null)
+              Image.network(
+                property.mainImageUrl!,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const _PropertyImageFallback(),
+              )
+            else
+              const _PropertyImageFallback(),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
                 children: [
-                  Text('${property.price} FCFA', style: const TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
-                  Chip(label: Text(tag), visualDensity: VisualDensity.compact, backgroundColor: IvoryColors.orange.withOpacity(0.15)),
-                  const SizedBox(height: 6),
-                  const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black45),
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFF0E0), Color(0xFFFFD9B3)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child:
+                        const Icon(Icons.apartment, color: IvoryColors.orange),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(property.title,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        Text('${property.city} \u2022 ${property.district}',
+                            style: const TextStyle(color: Colors.black54)),
+                        const SizedBox(height: 4),
+                        Text(
+                            '${property.rooms} pi\u00e8ces \u2022 ${property.surface} m\u00b2',
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54)),
+                        if (property.isTestData) ...[
+                          const SizedBox(height: 6),
+                          const TestDataBadge(),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('${property.price} FCFA',
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      Chip(
+                          label: Text(tag),
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor:
+                              IvoryColors.orange.withOpacity(0.15)),
+                      const SizedBox(height: 6),
+                      const Icon(Icons.arrow_forward_ios,
+                          size: 14, color: Colors.black45),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+class _PropertyImageFallback extends StatelessWidget {
+  const _PropertyImageFallback();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 150,
+        color: const Color(0xFFFFF0E0),
+        child: const Center(
+            child: Icon(Icons.apartment, size: 48, color: IvoryColors.orange)),
+      );
+}
+
 class PropertyDetailPage extends StatelessWidget {
-  const PropertyDetailPage({required this.property, required this.tag, required this.endpoint, required this.token, super.key});
+  const PropertyDetailPage(
+      {required this.property,
+      required this.tag,
+      required this.endpoint,
+      required this.token,
+      super.key});
 
   final Property property;
   final String tag;
@@ -1166,14 +1582,20 @@ class PropertyDetailPage extends StatelessWidget {
                   Expanded(
                     child: Text(
                       property.title,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
                   ),
-                  Chip(label: Text(tag), backgroundColor: IvoryColors.orange.withOpacity(0.15)),
+                  Chip(
+                      label: Text(tag),
+                      backgroundColor: IvoryColors.orange.withOpacity(0.15)),
                 ],
               ),
               const SizedBox(height: 16),
-              PropertyDetails(property: property, endpoint: endpoint, token: token),
+              PropertyDetails(
+                  property: property, endpoint: endpoint, token: token),
             ],
           ),
         ),
@@ -1182,9 +1604,12 @@ class PropertyDetailPage extends StatelessWidget {
   }
 }
 
-
 class PropertyDetails extends StatelessWidget {
-  const PropertyDetails({required this.property, required this.endpoint, required this.token, super.key});
+  const PropertyDetails(
+      {required this.property,
+      required this.endpoint,
+      required this.token,
+      super.key});
 
   final Property property;
   final String endpoint;
@@ -1199,7 +1624,8 @@ class PropertyDetails extends StatelessWidget {
     final images = _allImages;
     if (images.isEmpty) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ImageViewerPage(images: images, initialIndex: index)),
+      MaterialPageRoute(
+          builder: (_) => ImageViewerPage(images: images, initialIndex: index)),
     );
   }
 
@@ -1218,7 +1644,8 @@ class PropertyDetails extends StatelessWidget {
                 height: 260,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const MediaPlaceholder(icon: Icons.image_not_supported),
+                errorBuilder: (context, error, stackTrace) =>
+                    const MediaPlaceholder(icon: Icons.image_not_supported),
               ),
             ),
           )
@@ -1233,7 +1660,8 @@ class PropertyDetails extends StatelessWidget {
               itemCount: property.galleryImageUrls.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) => GestureDetector(
-                onTap: () => _openViewer(context, (property.mainImageUrl != null ? 1 : 0) + index),
+                onTap: () => _openViewer(
+                    context, (property.mainImageUrl != null ? 1 : 0) + index),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Image.network(
@@ -1241,7 +1669,11 @@ class PropertyDetails extends StatelessWidget {
                     width: 56,
                     height: 56,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox(width: 56, height: 56, child: Icon(Icons.broken_image, size: 20)),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: Icon(Icons.broken_image, size: 20)),
                   ),
                 ),
               ),
@@ -1254,18 +1686,28 @@ class PropertyDetails extends StatelessWidget {
           runSpacing: 8,
           children: [
             DetailChip(icon: Icons.category, label: property.category),
-            DetailChip(icon: Icons.place, label: '${property.city}, ${property.district}'),
+            DetailChip(
+                icon: Icons.place,
+                label: '${property.city}, ${property.district}'),
             DetailChip(icon: Icons.payments, label: '${property.price} FCFA'),
-            DetailChip(icon: Icons.meeting_room, label: '${property.rooms} pièces'),
-            DetailChip(icon: Icons.square_foot, label: '${property.surface} m²'),
-            if (property.hasVideo) const DetailChip(icon: Icons.videocam, label: 'Vidéo disponible'),
+            DetailChip(
+                icon: Icons.meeting_room, label: '${property.rooms} pièces'),
+            DetailChip(
+                icon: Icons.square_foot, label: '${property.surface} m²'),
+            if (property.hasVideo)
+              const DetailChip(icon: Icons.videocam, label: 'Vidéo disponible'),
           ],
         ),
         if (property.description.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text('Description', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Description',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text(property.description, style: const TextStyle(color: Colors.black87)),
+          Text(property.description,
+              style: const TextStyle(color: Colors.black87)),
         ],
         if (property.videoUrl != null) ...[
           const SizedBox(height: 12),
@@ -1277,7 +1719,8 @@ class PropertyDetails extends StatelessWidget {
               ? null
               : () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => InterestRequestPage(property: property, endpoint: endpoint, token: token),
+                      builder: (_) => InterestRequestPage(
+                          property: property, endpoint: endpoint, token: token),
                     ),
                   ),
           icon: const Icon(Icons.mark_email_unread),
@@ -1289,7 +1732,11 @@ class PropertyDetails extends StatelessWidget {
 }
 
 class InterestRequestPage extends StatefulWidget {
-  const InterestRequestPage({required this.property, required this.endpoint, required this.token, super.key});
+  const InterestRequestPage(
+      {required this.property,
+      required this.endpoint,
+      required this.token,
+      super.key});
 
   final Property property;
   final String endpoint;
@@ -1346,7 +1793,8 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
 
   Future<void> _send() async {
     if (startDate == null || messageController.text.trim().isEmpty) {
-      setState(() => error = 'Choisissez une date et ajoutez un message de présentation.');
+      setState(() =>
+          error = 'Choisissez une date et ajoutez un message de présentation.');
       return;
     }
     setState(() {
@@ -1369,7 +1817,8 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
         },
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Votre demande a été envoyée au bailleur.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Votre demande a été envoyée au bailleur.')));
         Navigator.of(context).pop();
       }
     } catch (exception) {
@@ -1386,35 +1835,58 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Text(widget.property.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+          Text(widget.property.title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             value: profession,
             decoration: const InputDecoration(labelText: 'Profession'),
-            items: professions.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-            onChanged: (value) => setState(() => profession = value ?? profession),
+            items: professions
+                .map((value) =>
+                    DropdownMenuItem(value: value, child: Text(value)))
+                .toList(),
+            onChanged: (value) =>
+                setState(() => profession = value ?? profession),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: salaryRange,
             decoration: const InputDecoration(labelText: 'Tranche de salaire'),
-            items: salaries.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-            onChanged: (value) => setState(() => salaryRange = value ?? salaryRange),
+            items: salaries
+                .map((value) =>
+                    DropdownMenuItem(value: value, child: Text(value)))
+                .toList(),
+            onChanged: (value) =>
+                setState(() => salaryRange = value ?? salaryRange),
           ),
           const SizedBox(height: 12),
-          TextField(controller: employerController, decoration: const InputDecoration(labelText: 'Employeur')),
+          TextField(
+              controller: employerController,
+              decoration: const InputDecoration(labelText: 'Employeur')),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             value: occupants,
-            decoration: const InputDecoration(labelText: 'Nombre de personnes à loger'),
-            items: List.generate(8, (index) => DropdownMenuItem(value: index + 1, child: Text('${index + 1} personne${index == 0 ? '' : 's'}'))),
-            onChanged: (value) => setState(() => occupants = value ?? occupants),
+            decoration:
+                const InputDecoration(labelText: 'Nombre de personnes à loger'),
+            items: List.generate(
+                8,
+                (index) => DropdownMenuItem(
+                    value: index + 1,
+                    child:
+                        Text('${index + 1} personne${index == 0 ? '' : 's'}'))),
+            onChanged: (value) =>
+                setState(() => occupants = value ?? occupants),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _chooseDate,
             icon: const Icon(Icons.event),
-            label: Text(startDate == null ? 'Date de début souhaitée' : 'Début souhaité : ${_dateValue(startDate!)}'),
+            label: Text(startDate == null
+                ? 'Date de début souhaitée'
+                : 'Début souhaité : ${_dateValue(startDate!)}'),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -1422,13 +1894,17 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
             maxLines: 5,
             decoration: const InputDecoration(
               labelText: 'Message au bailleur',
-              hintText: 'Présentez votre projet et ajoutez toute information utile.',
+              hintText:
+                  'Présentez votre projet et ajoutez toute information utile.',
             ),
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: sending ? null : _send,
-            icon: sending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator()) : const Icon(Icons.send),
+            icon: sending
+                ? const SizedBox(
+                    width: 18, height: 18, child: CircularProgressIndicator())
+                : const Icon(Icons.send),
             label: Text(sending ? 'Envoi...' : 'Envoyer ma demande'),
           ),
           if (error != null) ...[
@@ -1441,7 +1917,8 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
   }
 }
 
-String _dateValue(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+String _dateValue(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
 class VideoCard extends StatelessWidget {
   const VideoCard({required this.videoUrl, required this.title, super.key});
@@ -1456,7 +1933,9 @@ class VideoCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => VideoPlayerPage(videoUrl: videoUrl, title: title)),
+          MaterialPageRoute(
+              builder: (_) =>
+                  VideoPlayerPage(videoUrl: videoUrl, title: title)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -1469,25 +1948,29 @@ class VideoCard extends StatelessWidget {
                   color: IvoryColors.green.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.play_circle_fill, color: IvoryColors.green, size: 28),
+                child: const Icon(Icons.play_circle_fill,
+                    color: IvoryColors.green, size: 28),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Vidéo de présentation', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text('Vidéo de présentation',
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.black54),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black45),
+              const Icon(Icons.arrow_forward_ios,
+                  size: 14, color: Colors.black45),
             ],
           ),
         ),
@@ -1497,7 +1980,8 @@ class VideoCard extends StatelessWidget {
 }
 
 class VideoPlayerPage extends StatefulWidget {
-  const VideoPlayerPage({required this.videoUrl, required this.title, super.key});
+  const VideoPlayerPage(
+      {required this.videoUrl, required this.title, super.key});
 
   final String videoUrl;
   final String title;
@@ -1511,7 +1995,9 @@ String _videoUrlForPlayback(String rawUrl) {
   if (trimmed.isEmpty) return '';
 
   final lower = trimmed.toLowerCase();
-  if (lower.contains('w3schools.com') || lower.contains('example.com') || lower.contains('commondatastorage.googleapis.com')) {
+  if (lower.contains('w3schools.com') ||
+      lower.contains('example.com') ||
+      lower.contains('commondatastorage.googleapis.com')) {
     return 'https://media.w3.org/2010/05/sintel/trailer.mp4';
   }
 
@@ -1572,9 +2058,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
           ? FloatingActionButton(
               backgroundColor: IvoryColors.green,
               onPressed: () => setState(() {
-                controller.value.isPlaying ? controller.pause() : controller.play();
+                controller.value.isPlaying
+                    ? controller.pause()
+                    : controller.play();
               }),
-              child: Icon(controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+              child: Icon(
+                  controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
             )
           : null,
     );
@@ -1600,7 +2089,9 @@ class DetailChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -1627,7 +2118,8 @@ class MediaPlaceholder extends StatelessWidget {
 }
 
 class ImageViewerPage extends StatefulWidget {
-  const ImageViewerPage({required this.images, required this.initialIndex, super.key});
+  const ImageViewerPage(
+      {required this.images, required this.initialIndex, super.key});
 
   final List<String> images;
   final int initialIndex;
@@ -1637,7 +2129,8 @@ class ImageViewerPage extends StatefulWidget {
 }
 
 class _ImageViewerPageState extends State<ImageViewerPage> {
-  late final PageController controller = PageController(initialPage: widget.initialIndex);
+  late final PageController controller =
+      PageController(initialPage: widget.initialIndex);
   late int currentIndex = widget.initialIndex;
 
   @override
@@ -1666,7 +2159,10 @@ class _ImageViewerPageState extends State<ImageViewerPage> {
             child: Image.network(
               widget.images[index],
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.white54, size: 64),
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white54,
+                  size: 64),
             ),
           ),
         ),
@@ -1761,13 +2257,15 @@ class ErrorCard extends StatelessWidget {
         color: const Color(0xFFFFF1E8),
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Text(message, style: const TextStyle(color: Color(0xFF9A3D16))),
+          child:
+              Text(message, style: const TextStyle(color: Color(0xFF9A3D16))),
         ),
       );
 }
 
 class CacheStatusBar extends StatelessWidget {
-  const CacheStatusBar({required this.lastSynced, required this.loading, super.key});
+  const CacheStatusBar(
+      {required this.lastSynced, required this.loading, super.key});
 
   final DateTime? lastSynced;
   final bool loading;
@@ -1782,10 +2280,12 @@ class CacheStatusBar extends StatelessWidget {
 
     return Row(
       children: [
-        Icon(loading ? Icons.sync : Icons.cached, size: 14, color: Colors.black45),
+        Icon(loading ? Icons.sync : Icons.cached,
+            size: 14, color: Colors.black45),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(label, style: const TextStyle(fontSize: 11, color: Colors.black45)),
+          child: Text(label,
+              style: const TextStyle(fontSize: 11, color: Colors.black45)),
         ),
       ],
     );
@@ -1793,7 +2293,12 @@ class CacheStatusBar extends StatelessWidget {
 }
 
 class CreateMaintenanceCard extends StatelessWidget {
-  const CreateMaintenanceCard({required this.properties, required this.endpoint, required this.token, required this.onSubmitted, super.key});
+  const CreateMaintenanceCard(
+      {required this.properties,
+      required this.endpoint,
+      required this.token,
+      required this.onSubmitted,
+      super.key});
 
   final List<Property> properties;
   final String endpoint;
@@ -1808,25 +2313,31 @@ class CreateMaintenanceCard extends StatelessWidget {
         leading: const Icon(Icons.add_task, color: IvoryColors.green),
         title: const Text('Signaler un problème'),
         subtitle: const Text('Créer une demande de maintenance'),
-        onTap: token.isEmpty || properties.every((property) => property.id == null)
-            ? null
-            : () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CreateMaintenancePage(
-                      properties: properties,
-                      endpoint: endpoint,
-                      token: token,
-                      onSubmitted: onSubmitted,
+        onTap:
+            token.isEmpty || properties.every((property) => property.id == null)
+                ? null
+                : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CreateMaintenancePage(
+                          properties: properties,
+                          endpoint: endpoint,
+                          token: token,
+                          onSubmitted: onSubmitted,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
       ),
     );
   }
 }
 
 class CreateMaintenancePage extends StatefulWidget {
-  const CreateMaintenancePage({required this.properties, required this.endpoint, required this.token, required this.onSubmitted, super.key});
+  const CreateMaintenancePage(
+      {required this.properties,
+      required this.endpoint,
+      required this.token,
+      required this.onSubmitted,
+      super.key});
 
   final List<Property> properties;
   final String endpoint;
@@ -1853,8 +2364,11 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
   }
 
   Future<void> _submit() async {
-    if (propertyId == null || titleController.text.trim().isEmpty || descriptionController.text.trim().isEmpty) {
-      setState(() => error = 'Choisissez un bien et renseignez le sujet et la description.');
+    if (propertyId == null ||
+        titleController.text.trim().isEmpty ||
+        descriptionController.text.trim().isEmpty) {
+      setState(() => error =
+          'Choisissez un bien et renseignez le sujet et la description.');
       return;
     }
     setState(() {
@@ -1894,20 +2408,25 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
             decoration: const InputDecoration(labelText: 'Bien concerné'),
             items: widget.properties
                 .where((property) => property.id != null)
-                .map((property) => DropdownMenuItem(value: property.id, child: Text(property.title)))
+                .map((property) => DropdownMenuItem(
+                    value: property.id, child: Text(property.title)))
                 .toList(),
             onChanged: (value) => setState(() => propertyId = value),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: titleController,
-            decoration: const InputDecoration(labelText: 'Sujet du problème', hintText: 'Ex. Fuite sous évier'),
+            decoration: const InputDecoration(
+                labelText: 'Sujet du problème',
+                hintText: 'Ex. Fuite sous évier'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: descriptionController,
             maxLines: 6,
-            decoration: const InputDecoration(labelText: 'Description', hintText: 'Décrivez le problème et sa localisation'),
+            decoration: const InputDecoration(
+                labelText: 'Description',
+                hintText: 'Décrivez le problème et sa localisation'),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -1924,7 +2443,10 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: saving ? null : _submit,
-            icon: saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator()) : const Icon(Icons.send),
+            icon: saving
+                ? const SizedBox(
+                    width: 18, height: 18, child: CircularProgressIndicator())
+                : const Icon(Icons.send),
             label: Text(saving ? 'Envoi...' : 'Envoyer la demande'),
           ),
           if (error != null) ...[
@@ -1947,7 +2469,8 @@ class MutedText extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(text, style: const TextStyle(color: Colors.black54));
+  Widget build(BuildContext context) =>
+      Text(text, style: const TextStyle(color: Colors.black54));
 }
 
 class TestDataBadge extends StatelessWidget {
@@ -1967,7 +2490,11 @@ class TestDataBadge extends StatelessWidget {
         children: [
           Icon(Icons.science, size: 12, color: Color(0xFF8A6D00)),
           SizedBox(width: 4),
-          Text('Donnée de test', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF8A6D00))),
+          Text('Donnée de test',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF8A6D00))),
         ],
       ),
     );
@@ -1992,14 +2519,17 @@ class GraphQLClient {
     );
 
     final payload = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode < 200 || response.statusCode >= 300 || payload['errors'] != null) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        payload['errors'] != null) {
       throw Exception(payload['errors'] ?? 'HTTP ${response.statusCode}');
     }
 
     return payload['data'] as Map<String, dynamic>;
   }
 
-  Future<String> login(String endpoint, String username, String password) async {
+  Future<String> login(
+      String endpoint, String username, String password) async {
     final data = await query(
       endpoint,
       '',
@@ -2053,8 +2583,12 @@ class TenantDashboard {
       _items(json['myTenantProperties']).map(Property.fromJson).toList(),
       _items(json['myTenantPayments']).map(Payment.fromJson).toList(),
       _items(json['myTenantDocuments']).map(DocumentItem.fromJson).toList(),
-      _items(json['myTenantMaintenanceRequests']).map(Maintenance.fromJson).toList(),
-      _items(json['myPropertyInterestRequests']).map(InterestRequestItem.fromJson).toList(),
+      _items(json['myTenantMaintenanceRequests'])
+          .map(Maintenance.fromJson)
+          .toList(),
+      _items(json['myPropertyInterestRequests'])
+          .map(InterestRequestItem.fromJson)
+          .toList(),
       _items(json['notifications']).map(NotificationItem.fromJson).toList(),
     );
   }
@@ -2072,16 +2606,37 @@ class TenantDashboard {
             82,
             340000,
             isTestData: true,
-            description: 'Appartement calme avec jardin privé, proche des écoles internationales.',
+            description:
+                'Appartement calme avec jardin privé, proche des écoles internationales.',
             mainImageUrl: 'https://placehold.co/600x400',
             hasVideo: true,
             videoUrl: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
           ),
-          Property('Studio lumineux', 'Residence', 'Yamoussoukro', 'Centre', 1, 42, 195000, isTestData: true, description: 'Studio rénové avec cuisine équipée et bonne luminosité.'),
-          Property('Villa familiale', 'Residence', 'Abidjan', 'Plateau', 4, 150, 580000, isTestData: true, description: 'Villa spacieuse avec jardin clôturé et parking pour deux véhicules.'),
-          Property('Bureau commercial centre-ville', 'Business', 'Abidjan', 'Plateau', 2, 98, 480000, isTestData: true, description: 'Espace de bureaux climatisé, proche des institutions financières.'),
-          Property('Local commercial passant', 'Commerce', 'Yamoussoukro', 'Centre', 1, 60, 260000, isTestData: true, description: 'Local en rez-de-chaussée avec forte visibilité et accès client direct.'),
-          Property('Entrepôt logistique', 'Industrie', 'Abidjan', 'Vridi', 1, 540, 1150000, isTestData: true, description: 'Entrepôt sécurisé avec quai de chargement et bureaux annexes.'),
+          Property('Studio lumineux', 'Residence', 'Yamoussoukro', 'Centre', 1,
+              42, 195000,
+              isTestData: true,
+              description:
+                  'Studio rénové avec cuisine équipée et bonne luminosité.'),
+          Property('Villa familiale', 'Residence', 'Abidjan', 'Plateau', 4, 150,
+              580000,
+              isTestData: true,
+              description:
+                  'Villa spacieuse avec jardin clôturé et parking pour deux véhicules.'),
+          Property('Bureau commercial centre-ville', 'Business', 'Abidjan',
+              'Plateau', 2, 98, 480000,
+              isTestData: true,
+              description:
+                  'Espace de bureaux climatisé, proche des institutions financières.'),
+          Property('Local commercial passant', 'Commerce', 'Yamoussoukro',
+              'Centre', 1, 60, 260000,
+              isTestData: true,
+              description:
+                  'Local en rez-de-chaussée avec forte visibilité et accès client direct.'),
+          Property('Entrepôt logistique', 'Industrie', 'Abidjan', 'Vridi', 1,
+              540, 1150000,
+              isTestData: true,
+              description:
+                  'Entrepôt sécurisé avec quai de chargement et bureaux annexes.'),
         ],
         [
           Property(
@@ -2093,7 +2648,8 @@ class TenantDashboard {
             112,
             440000,
             isTestData: true,
-            description: 'Maison familiale louée avec séjour spacieux et cour extérieure.',
+            description:
+                'Maison familiale louée avec séjour spacieux et cour extérieure.',
             mainImageUrl: 'https://placehold.co/600x400',
           ),
         ],
@@ -2149,7 +2705,8 @@ class Property {
 
   factory Property.fromJson(Map<String, dynamic> json) => Property(
         json['title'] as String? ?? '-',
-        (json['category'] as Map<String, dynamic>?)?['title'] as String? ?? 'Autres',
+        (json['category'] as Map<String, dynamic>?)?['title'] as String? ??
+            'Autres',
         json['city'] as String? ?? '-',
         json['district'] as String? ?? '-',
         _int(json['rooms']),
@@ -2159,7 +2716,9 @@ class Property {
         isTestData: json['isTestData'] as bool? ?? false,
         description: json['description'] as String? ?? '',
         mainImageUrl: json['mainImageUrl'] as String?,
-        galleryImageUrls: (json['galleryImageUrls'] as List<dynamic>? ?? const []).cast<String>(),
+        galleryImageUrls:
+            (json['galleryImageUrls'] as List<dynamic>? ?? const [])
+                .cast<String>(),
         hasVideo: json['hasVideo'] as bool? ?? false,
         videoUrl: json['videoUrl'] as String?,
       );
@@ -2205,57 +2764,72 @@ class Maintenance {
       );
 }
 
-    class NotificationItem {
-      NotificationItem(this.id, this.title, this.message, this.propertyTitle, this.isRead);
+class NotificationItem {
+  NotificationItem(
+      this.id, this.title, this.message, this.propertyTitle, this.isRead);
 
-      final String id;
-      final String title;
-      final String message;
-      final String propertyTitle;
-      final bool isRead;
+  final String id;
+  final String title;
+  final String message;
+  final String propertyTitle;
+  final bool isRead;
 
-      factory NotificationItem.fromJson(Map<String, dynamic> json) => NotificationItem(
-            json['id'] as String? ?? '',
-            json['title'] as String? ?? 'Notification',
-            json['message'] as String? ?? '',
-            _nestedTitle(json['property']),
-            json['isRead'] as bool? ?? false,
-          );
-    }
+  factory NotificationItem.fromJson(Map<String, dynamic> json) =>
+      NotificationItem(
+        json['id'] as String? ?? '',
+        json['title'] as String? ?? 'Notification',
+        json['message'] as String? ?? '',
+        _nestedTitle(json['property']),
+        json['isRead'] as bool? ?? false,
+      );
+}
 
-    class TenantUnreadNotificationBanner extends StatelessWidget {
-      const TenantUnreadNotificationBanner({required this.notification, super.key});
+class TenantUnreadNotificationBanner extends StatelessWidget {
+  const TenantUnreadNotificationBanner({required this.notification, super.key});
 
-      final NotificationItem notification;
+  final NotificationItem notification;
 
-      @override
-      Widget build(BuildContext context) => Card(
-            color: const Color(0xFFFFF4E5),
-            child: ListTile(
-              leading: const Icon(Icons.mark_email_unread, color: IvoryColors.orange),
-              title: Text(notification.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Text('${notification.message}\n${notification.propertyTitle}', maxLines: 3, overflow: TextOverflow.ellipsis),
-              isThreeLine: true,
-            ),
-          );
-    }
+  @override
+  Widget build(BuildContext context) => Card(
+        color: const Color(0xFFFFF4E5),
+        child: ListTile(
+          leading:
+              const Icon(Icons.mark_email_unread, color: IvoryColors.orange),
+          title: Text(notification.title,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: Text(
+              '${notification.message}\n${notification.propertyTitle}',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis),
+          isThreeLine: true,
+        ),
+      );
+}
 
-    class NotificationTile extends StatelessWidget {
-      const NotificationTile(this.notification, {super.key});
+class NotificationTile extends StatelessWidget {
+  const NotificationTile(this.notification, {super.key});
 
-      final NotificationItem notification;
+  final NotificationItem notification;
 
-      @override
-      Widget build(BuildContext context) => Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: Icon(notification.isRead ? Icons.notifications_none : Icons.notifications_active, color: notification.isRead ? Colors.grey : IvoryColors.orange),
-              title: Text(notification.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Text('${notification.message}\n${notification.propertyTitle}', maxLines: 3, overflow: TextOverflow.ellipsis),
-              isThreeLine: true,
-            ),
-          );
-    }
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: ListTile(
+          leading: Icon(
+              notification.isRead
+                  ? Icons.notifications_none
+                  : Icons.notifications_active,
+              color: notification.isRead ? Colors.grey : IvoryColors.orange),
+          title: Text(notification.title,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: Text(
+              '${notification.message}\n${notification.propertyTitle}',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis),
+          isThreeLine: true,
+        ),
+      );
+}
 
 class InterestRequestItem {
   InterestRequestItem(this.id, this.propertyTitle, this.status);
@@ -2264,7 +2838,8 @@ class InterestRequestItem {
   final String propertyTitle;
   final String status;
 
-  factory InterestRequestItem.fromJson(Map<String, dynamic> json) => InterestRequestItem(
+  factory InterestRequestItem.fromJson(Map<String, dynamic> json) =>
+      InterestRequestItem(
         json['id'] as String? ?? '',
         _nestedTitle(json['property']),
         _interestStatus(json['status']),
@@ -2272,7 +2847,8 @@ class InterestRequestItem {
 }
 
 class InterestRequestTile extends StatelessWidget {
-  const InterestRequestTile(this.request, {required this.endpoint, required this.token, super.key});
+  const InterestRequestTile(this.request,
+      {required this.endpoint, required this.token, super.key});
 
   final InterestRequestItem request;
   final String endpoint;
@@ -2283,21 +2859,28 @@ class InterestRequestTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 8),
         child: ListTile(
           leading: const Icon(Icons.forum, color: IvoryColors.green),
-          title: Text(request.propertyTitle, style: const TextStyle(fontWeight: FontWeight.w800)),
+          title: Text(request.propertyTitle,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text('Statut : ${request.status}'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InterestChatPage(
-                interestRequestId: request.id,
-                propertyTitle: request.propertyTitle,
-                endpoint: endpoint,
-                token: token,
-              ))),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => InterestChatPage(
+                    interestRequestId: request.id,
+                    propertyTitle: request.propertyTitle,
+                    endpoint: endpoint,
+                    token: token,
+                  ))),
         ),
       );
 }
 
 class InterestChatPage extends StatefulWidget {
-  const InterestChatPage({required this.interestRequestId, required this.propertyTitle, required this.endpoint, required this.token, super.key});
+  const InterestChatPage(
+      {required this.interestRequestId,
+      required this.propertyTitle,
+      required this.endpoint,
+      required this.token,
+      super.key});
 
   final String interestRequestId;
   final String propertyTitle;
@@ -2330,8 +2913,14 @@ class _InterestChatPageState extends State<InterestChatPage> {
 
   Future<void> _loadMessages() async {
     try {
-      final data = await GraphQLClient().query(widget.endpoint, widget.token, interestMessagesQuery, variables: {'interestRequestId': widget.interestRequestId});
-      if (mounted) setState(() => messages = _items(data['propertyInterestMessages']).map(InterestMessageItem.fromJson).toList());
+      final data = await GraphQLClient().query(
+          widget.endpoint, widget.token, interestMessagesQuery,
+          variables: {'interestRequestId': widget.interestRequestId});
+      if (mounted) {
+        setState(() => messages = _items(data['propertyInterestMessages'])
+            .map(InterestMessageItem.fromJson)
+            .toList());
+      }
     } catch (exception) {
       if (mounted) setState(() => error = 'Chargement impossible : $exception');
     } finally {
@@ -2341,13 +2930,18 @@ class _InterestChatPageState extends State<InterestChatPage> {
 
   Future<void> _send() async {
     if (messageController.text.trim().isEmpty) return;
-    setState(() { sending = true; error = null; });
+    setState(() {
+      sending = true;
+      error = null;
+    });
     try {
-      await GraphQLClient().query(widget.endpoint, widget.token, sendInterestMessageMutation, variables: {
-        'interestRequestId': widget.interestRequestId,
-        'message': messageController.text.trim(),
-        'messageType': messageType,
-      });
+      await GraphQLClient().query(
+          widget.endpoint, widget.token, sendInterestMessageMutation,
+          variables: {
+            'interestRequestId': widget.interestRequestId,
+            'message': messageController.text.trim(),
+            'messageType': messageType,
+          });
       messageController.clear();
       await _loadMessages();
     } catch (exception) {
@@ -2362,29 +2956,58 @@ class _InterestChatPageState extends State<InterestChatPage> {
         appBar: AppBar(title: Text(widget.propertyTitle)),
         body: Column(
           children: [
-            if (error != null) Padding(padding: const EdgeInsets.all(12), child: Text(error!, style: const TextStyle(color: Colors.red))),
+            if (error != null)
+              Padding(
+                  padding: const EdgeInsets.all(12),
+                  child:
+                      Text(error!, style: const TextStyle(color: Colors.red))),
             Expanded(
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : messages.isEmpty
                       ? const Center(child: Text('Aucun message.'))
-                      : ListView.builder(padding: const EdgeInsets.all(16), itemCount: messages.length, itemBuilder: (_, index) => _MessageBubble(message: messages[index])),
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: messages.length,
+                          itemBuilder: (_, index) =>
+                              _MessageBubble(message: messages[index])),
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               color: Colors.white,
               child: Row(children: [
-                Expanded(child: Column(children: [
-                  DropdownButtonFormField<String>(value: messageType, decoration: const InputDecoration(labelText: 'Réponse'), items: const [
-                    DropdownMenuItem(value: 'message', child: Text('Message')),
-                    DropdownMenuItem(value: 'visit_confirmation', child: Text('Confirmer la visite')),
-                    DropdownMenuItem(value: 'visit_declined', child: Text('Refuser la visite')),
-                  ], onChanged: (value) => setState(() => messageType = value ?? 'message')),
+                Expanded(
+                    child: Column(children: [
+                  DropdownButtonFormField<String>(
+                      value: messageType,
+                      decoration: const InputDecoration(labelText: 'Réponse'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'message', child: Text('Message')),
+                        DropdownMenuItem(
+                            value: 'visit_confirmation',
+                            child: Text('Confirmer la visite')),
+                        DropdownMenuItem(
+                            value: 'visit_declined',
+                            child: Text('Refuser la visite')),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => messageType = value ?? 'message')),
                   const SizedBox(height: 8),
-                  TextField(controller: messageController, maxLines: 3, decoration: const InputDecoration(hintText: 'Votre réponse')),
+                  TextField(
+                      controller: messageController,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(hintText: 'Votre réponse')),
                 ])),
                 const SizedBox(width: 8),
-                IconButton(onPressed: sending ? null : _send, icon: sending ? const CircularProgressIndicator() : const Icon(Icons.send), color: IvoryColors.green, tooltip: 'Envoyer'),
+                IconButton(
+                    onPressed: sending ? null : _send,
+                    icon: sending
+                        ? const CircularProgressIndicator()
+                        : const Icon(Icons.send),
+                    color: IvoryColors.green,
+                    tooltip: 'Envoyer'),
               ]),
             ),
           ],
@@ -2393,18 +3016,21 @@ class _InterestChatPageState extends State<InterestChatPage> {
 }
 
 class InterestMessageItem {
-  InterestMessageItem(this.message, this.messageType, this.proposedVisitAt, this.senderUsername);
+  InterestMessageItem(this.message, this.messageType, this.proposedVisitAt,
+      this.senderUsername);
 
   final String message;
   final String messageType;
   final String? proposedVisitAt;
   final String senderUsername;
 
-  factory InterestMessageItem.fromJson(Map<String, dynamic> json) => InterestMessageItem(
+  factory InterestMessageItem.fromJson(Map<String, dynamic> json) =>
+      InterestMessageItem(
         json['message'] as String? ?? '',
         json['messageType'] as String? ?? 'message',
         json['proposedVisitAt'] as String?,
-        (json['sender'] as Map<String, dynamic>?)?['username'] as String? ?? 'Utilisateur',
+        (json['sender'] as Map<String, dynamic>?)?['username'] as String? ??
+            'Utilisateur',
       );
 }
 
@@ -2422,10 +3048,12 @@ class _MessageBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(message.senderUsername, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(message.senderUsername,
+                  style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
               Text(message.message),
-              if (message.proposedVisitAt != null) Text('Visite proposée : ${message.proposedVisitAt}'),
+              if (message.proposedVisitAt != null)
+                Text('Visite proposée : ${message.proposedVisitAt}'),
             ],
           ),
         ),
@@ -2434,20 +3062,25 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-List<Map<String, dynamic>> _items(Object? value) => (value as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
-int _int(Object? value) => value is int ? value : int.tryParse('${value ?? ''}') ?? 0;
-String _nestedTitle(Object? value) => (value as Map<String, dynamic>?)?['title'] as String? ?? '-';
-String _interestStatus(Object? value) => const {
+List<Map<String, dynamic>> _items(Object? value) =>
+    (value as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+int _int(Object? value) =>
+    value is int ? value : int.tryParse('${value ?? ''}') ?? 0;
+String _nestedTitle(Object? value) =>
+    (value as Map<String, dynamic>?)?['title'] as String? ?? '-';
+String _interestStatus(Object? value) =>
+    const {
       'PENDING': 'En attente',
       'REVIEWING': 'En cours d’examen',
       'ACCEPTED': 'Acceptée',
       'REJECTED': 'Refusée',
-    }['${value ?? ''}'] ?? '${value ?? '-'}';
+    }['${value ?? ''}'] ??
+    '${value ?? '-'}';
 
 const tenantQuery = r'''
-query TenantDashboard {
+query TenantDashboard($search: String) {
   me { username isSeeker isTenant }
-  publicDescriptions(first: 10) { id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl }
+  publicDescriptions(first: 10, search: $search) { id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl }
   myTenantProperties { id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl }
   myTenantPayments { amount status dueDate }
   myTenantDocuments { title documentType }
