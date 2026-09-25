@@ -12,7 +12,13 @@ Flutter mobile frontend for real-estate seekers and tenants.
 
 ## Run
 
-Shared code lives in the sibling `immoizi-core` package (path dependency `../immoizi-core`), so check it out next to this repo.
+Shared code lives in the sibling [`immoizi-core`](https://github.com/giss1408/immoizi-core) package (path dependency `../immoizi-core`), so clone it next to this repo:
+
+```bash
+git clone https://github.com/giss1408/immoizi-core.git
+git clone https://github.com/giss1408/immoizi-App-user-tenant.git
+cd immoizi-App-user-tenant
+```
 
 ```bash
 flutter pub get
