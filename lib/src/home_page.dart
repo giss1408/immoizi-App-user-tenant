@@ -40,6 +40,17 @@ class _TenantHomePageState extends State<TenantHomePage>
   int tab = 0;
 
   @override
+  Map<String, Object?> get extraQueryVariables =>
+      {'rentalType': filters.rentalType?.apiValue};
+
+  /// Applies new filters; the rental type is filtered by the backend.
+  void _applyFilters(PropertyFilters next) {
+    final reload = next.rentalType != filters.rentalType;
+    setState(() => filters = next);
+    if (reload) load();
+  }
+
+  @override
   TenantDashboard parseDashboard(Map<String, dynamic> json) =>
       TenantDashboard.fromJson(json);
 
@@ -136,6 +147,10 @@ class _TenantHomePageState extends State<TenantHomePage>
                             dashboard,
                             searchQuery: searchQuery,
                             filters: filters,
+                            onRentalTypeChanged: (type) => _applyFilters(
+                                type == null
+                                    ? filters.copyWith(clearRentalType: true)
+                                    : filters.copyWith(rentalType: type)),
                             endpoint: endpoint.text.trim(),
                             token: token.text.trim(),
                             onSubmitted: load,
@@ -250,6 +265,6 @@ class _TenantHomePageState extends State<TenantHomePage>
                 .toSet()
                 .toList()
               ..sort()));
-    if (result != null && mounted) setState(() => filters = result);
+    if (result != null && mounted) _applyFilters(result);
   }
 }

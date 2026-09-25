@@ -12,6 +12,7 @@ class TenantDashboardView extends StatelessWidget {
     required this.onSubmitted,
     this.searchQuery = '',
     this.filters = const PropertyFilters(),
+    this.onRentalTypeChanged,
     super.key,
   });
 
@@ -21,6 +22,9 @@ class TenantDashboardView extends StatelessWidget {
   final VoidCallback onSubmitted;
   final String searchQuery;
   final PropertyFilters filters;
+
+  /// Quick "Toutes / Au mois / Courte durée" filter.
+  final ValueChanged<RentalType?>? onRentalTypeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +42,12 @@ class TenantDashboardView extends StatelessWidget {
         SectionHeader('Biens disponibles',
             count: availableProperties.length,
             subtitle: 'Logements et locaux à louer près de chez vous'),
+        if (onRentalTypeChanged != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: RentalTypeChips(
+                value: filters.rentalType, onChanged: onRentalTypeChanged!),
+          ),
         GroupedPropertyList(
           properties: availableProperties,
           cardBuilder: (property) => PropertyCard(property,

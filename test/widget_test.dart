@@ -28,7 +28,11 @@ class FakeBackend {
 http.Response _json(Object body) => http.Response(jsonEncode(body), 200,
     headers: {'content-type': 'application/json; charset=utf-8'});
 
-Map<String, dynamic> _dashboard({String title = 'Villa Riviera'}) => {
+Map<String, dynamic> _dashboard(
+        {String title = 'Villa Riviera',
+        String rentalType = 'LONG_TERM',
+        int price = 650000}) =>
+    {
       'me': null,
       'publicDescriptions': [
         {
@@ -38,8 +42,9 @@ Map<String, dynamic> _dashboard({String title = 'Villa Riviera'}) => {
           'district': 'Riviera',
           'rooms': 4,
           'surfaceM2': 140,
-          'price': 650000,
+          'price': price,
           'category': {'title': 'Residence'},
+          'rentalType': rentalType,
         }
       ],
       'myTenantProperties': [],
@@ -88,7 +93,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Villa Riviera'), findsOneWidget);
-    expect(find.text('650 000 FCFA'), findsOneWidget);
+    expect(find.text('650 000 FCFA / mois'), findsOneWidget);
     expect(
         backend.requests.single.headers.containsKey('Authorization'), isFalse);
   });
@@ -144,5 +149,37 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('tenant_dashboard_cache_v1'),
         contains('Villa Riviera'));
+  });
+
+  testWidgets('the rental duration chips filter listings on the backend',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final backend = FakeBackend((body, _) {
+      final rentalType = (body['variables'] as Map)['rentalType'];
+      return _json({
+        'data': rentalType == 'short_term'
+            ? _dashboard(
+                title: 'Appartement meublé Riviera',
+                rentalType: 'SHORT_TERM',
+                price: 35000)
+            : _dashboard()
+      });
+    });
+    await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
+    await tester.pumpAndSettle();
+    expect(find.text('Villa Riviera'), findsOneWidget);
+
+    await tester.tap(find.text('Courte durée'));
+    await tester.pumpAndSettle();
+
+    expect((jsonDecode(backend.requests.last.body) as Map)['variables'],
+        {'search': null, 'rentalType': 'short_term'});
+    expect(find.text('Appartement meublé Riviera'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+        prefs.getString('tenant_dashboard_cache_v1'), contains('Villa Riviera'),
+        reason: 'filtered results must not replace the offline cache');
   });
 }

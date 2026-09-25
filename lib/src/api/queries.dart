@@ -1,18 +1,18 @@
 const _propertyFields =
-    'id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl';
+    'id title city district rooms surfaceM2 price rentalType weeklyPrice category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl';
 
 /// Public listings only, for visitors who are not signed in.
 const publicListingsQuery = '''
-query PublicListings(\$search: String) {
-  publicDescriptions(first: 10, search: \$search) { $_propertyFields }
+query PublicListings(\$search: String, \$rentalType: String) {
+  publicDescriptions(first: 20, search: \$search, rentalType: \$rentalType) { $_propertyFields }
 }
 ''';
 
-const tenantQuery = r'''
-query TenantDashboard($search: String) {
+const tenantQuery = '''
+query TenantDashboard(\$search: String, \$rentalType: String) {
   me { username isSeeker isTenant }
-  publicDescriptions(first: 10, search: $search) { id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl }
-  myTenantProperties { id title city district rooms surfaceM2 price category { title } isTestData description mainImageUrl galleryImageUrls hasVideo videoUrl }
+  publicDescriptions(first: 20, search: \$search, rentalType: \$rentalType) { $_propertyFields }
+  myTenantProperties { $_propertyFields }
   myTenantPayments { amount status dueDate }
   myTenantDocuments { title documentType }
   myTenantMaintenanceRequests { title priority status }
