@@ -32,13 +32,15 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  http: ^1.2.2
-  shared_preferences: ^2.5.3
-  video_player: ^2.9.5
+  immoizi_core:
+    path: ../immoizi-core
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_secure_storage: ^9.2.4
+  http: ^1.2.2
+  shared_preferences: ^2.5.3
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

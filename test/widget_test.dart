@@ -1,21 +1,135 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:immoizi_app_user_tenant/main.dart';
+import 'package:immoizi_core/immoizi_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Records requests and answers with [handler].
+class FakeBackend {
+  FakeBackend(this.handler);
+
+  final http.Response Function(Map<String, dynamic> body, http.Request request)
+      handler;
+  final requests = <http.Request>[];
+
+  GraphQLClient get client =>
+      GraphQLClient(httpClient: MockClient((request) async {
+        requests.add(request);
+        return handler(
+            jsonDecode(request.body) as Map<String, dynamic>, request);
+      }));
+}
+
+http.Response _json(Object body) => http.Response(jsonEncode(body), 200,
+    headers: {'content-type': 'application/json; charset=utf-8'});
+
+Map<String, dynamic> _dashboard({String title = 'Villa Riviera'}) => {
+      'me': null,
+      'publicDescriptions': [
+        {
+          'id': '1',
+          'title': title,
+          'city': 'Abidjan',
+          'district': 'Riviera',
+          'rooms': 4,
+          'surfaceM2': 140,
+          'price': 650000,
+          'category': {'title': 'Residence'},
+        }
+      ],
+      'myTenantProperties': [],
+      'myTenantPayments': [],
+      'myTenantDocuments': [],
+      'myTenantMaintenanceRequests': [],
+      'myPropertyInterestRequests': [],
+      'notifications': [],
+    };
 
 void main() {
-    testWidgets('renders tenant dashboard shell', (WidgetTester tester) async {
-      await tester.pumpWidget(const ImmoiziUserTenantApp());
-      await tester.pumpAndSettle();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+  });
 
-      expect(find.text('Immoizi'), findsOneWidget);
-      expect(find.text('Recherche & espace locataire'), findsOneWidget);
-      expect(find.text('Synchroniser'), findsOneWidget);
+  testWidgets('falls back to demo data when the backend is unreachable',
+      (tester) async {
+    final backend = FakeBackend((_, __) => throw http.ClientException('down'));
+    await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Immoizi'), findsOneWidget);
+    expect(find.text('Recherche & espace locataire'), findsOneWidget);
+    expect(find.byTooltip('Synchroniser'), findsOneWidget);
+    expect(find.textContaining('Serveur injoignable'), findsOneWidget);
+    expect(find.text('Appartement vue jardin'), findsOneWidget);
+  });
+
+  testWidgets('loads public listings without signing in', (tester) async {
+    final backend = FakeBackend((_, __) => _json({'data': _dashboard()}));
+    await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Villa Riviera'), findsOneWidget);
+    expect(find.text('650 000 FCFA'), findsOneWidget);
+    expect(
+        backend.requests.single.headers.containsKey('Authorization'), isFalse);
+  });
+
+  testWidgets('restores the stored session on startup', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({
+      'tenant_token': 'stored-token',
+      'tenant_username': 'nadia',
+      'tenant_endpoint': 'http://backend.test/graphql',
+    });
+    final backend = FakeBackend((_, __) => _json({'data': _dashboard()}));
+    await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
+    await tester.pumpAndSettle();
+
+    final request = backend.requests.single;
+    expect(request.url.toString(), 'http://backend.test/graphql');
+    expect(request.headers['Authorization'], 'Bearer stored-token');
+    expect(find.text('Connecté — nadia'), findsOneWidget);
+  });
+
+  testWidgets('an expired token signs the user out', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({'tenant_token': 'expired'});
+    final backend = FakeBackend((_, __) => _json({
+          'errors': [
+            {'message': "L'authentification est obligatoire."}
+          ]
+        }));
+    await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Session expirée'), findsOneWidget);
+    expect(find.text('Mode démonstration'), findsOneWidget);
+    expect(
+        await const FlutterSecureStorage().read(key: 'tenant_token'), isNull);
+  });
+
+  testWidgets('a search result does not overwrite the offline cache',
+      (tester) async {
+    final backend = FakeBackend((body, _) {
+      final search = (body['variables'] as Map)['search'];
+      return _json({
+        'data': _dashboard(title: search == null ? 'Villa Riviera' : 'Studio')
+      });
+    });
+    await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'studio');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(backend.requests, hasLength(2));
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('tenant_dashboard_cache_v1'),
+        contains('Villa Riviera'));
   });
 }
