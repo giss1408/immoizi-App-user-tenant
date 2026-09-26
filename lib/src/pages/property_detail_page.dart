@@ -26,7 +26,7 @@ class PropertyDetailPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: IvoryColors.green,
-        foregroundColor: Colors.white,
+        foregroundColor: IvoryColors.onPrimary,
         title: Text(property.title),
       ),
       body: SafeArea(
@@ -167,11 +167,12 @@ class PropertyDetails extends StatelessWidget {
                     : Icons.calendar_month,
                 label: property.rentalType.label),
             DetailChip(
-                icon: Icons.meeting_room, label: '${property.rooms} pièces'),
+                icon: Icons.meeting_room,
+                label: tr('{count} pièces', {'count': property.rooms})),
             DetailChip(
                 icon: Icons.square_foot, label: '${property.surface} m²'),
             if (property.hasVideo)
-              const DetailChip(icon: Icons.videocam, label: 'Vidéo disponible'),
+              DetailChip(icon: Icons.videocam, label: tr('Vidéo disponible')),
           ],
         ),
         if (property.description.isNotEmpty) ...[
@@ -182,8 +183,7 @@ class PropertyDetails extends StatelessWidget {
                   .titleSmall
                   ?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text(property.description,
-              style: const TextStyle(color: Colors.black87)),
+          Text(property.description, style: TextStyle(color: IvoryColors.ink)),
         ],
         if (property.videoUrl != null) ...[
           const SizedBox(height: 12),
@@ -251,7 +251,7 @@ class _InterestActionState extends State<InterestAction> {
           border: Border.all(color: IvoryColors.orange.withOpacity(0.35)),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Icon(Icons.hourglass_top, color: IvoryColors.orange),
+          Icon(Icons.hourglass_top, color: IvoryColors.orange),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -259,15 +259,18 @@ class _InterestActionState extends State<InterestAction> {
               children: [
                 Text(
                     sentOn.isEmpty
-                        ? 'Demande envoyée'
-                        : 'Demande envoyée le $sentOn',
+                        ? tr('Demande envoyée')
+                        : tr('Demande envoyée le {date}', {'date': sentOn}),
                     style: const TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
                 Text(
                   retryOn.isEmpty
-                      ? 'En attente de la réponse du bailleur. Une seule demande par bien est possible à la fois.'
-                      : 'En attente de la réponse du bailleur. Vous pourrez envoyer une nouvelle demande après sa réponse, ou à partir du $retryOn.',
-                  style: const TextStyle(color: IvoryColors.muted),
+                      ? tr(
+                          'En attente de la réponse du bailleur. Une seule demande par bien est possible à la fois.')
+                      : tr(
+                          'En attente de la réponse du bailleur. Vous pourrez envoyer une nouvelle demande après sa réponse, ou à partir du {date}.',
+                          {'date': retryOn}),
+                  style: TextStyle(color: IvoryColors.muted),
                 ),
               ],
             ),
@@ -283,13 +286,13 @@ class _InterestActionState extends State<InterestAction> {
         FilledButton.icon(
           onPressed: widget.property.id == null || !signedIn ? null : _openForm,
           icon: const Icon(Icons.mark_email_unread),
-          label: const Text('Je suis intéressé par ce bien'),
+          label: Text(tr('Je suis intéressé par ce bien')),
         ),
         if (widget.property.id != null && !signedIn)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: MutedText(
-                'Connectez-vous dans « Mon espace » pour envoyer une demande au bailleur.'),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: MutedText(tr(
+                'Connectez-vous dans « Mon espace » pour envoyer une demande au bailleur.')),
           ),
       ],
     );

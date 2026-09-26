@@ -65,8 +65,8 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
 
   Future<void> _send() async {
     if (startDate == null || messageController.text.trim().isEmpty) {
-      setState(() =>
-          error = 'Choisissez une date et ajoutez un message de présentation.');
+      setState(() => error =
+          tr('Choisissez une date et ajoutez un message de présentation.'));
       return;
     }
     setState(() {
@@ -89,12 +89,13 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
         },
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Votre demande a été envoyée au bailleur.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(tr('Votre demande a été envoyée au bailleur.'))));
         Navigator.of(context).pop(true);
       }
     } catch (exception) {
-      setState(() => error = 'Envoi impossible : ${describeError(exception)}');
+      setState(() => error = tr(
+          'Envoi impossible : {error}', {'error': describeError(exception)}));
     } finally {
       if (mounted) setState(() => sending = false);
     }
@@ -103,7 +104,7 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Je suis intéressé')),
+      appBar: AppBar(title: Text(tr('Je suis intéressé'))),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -118,7 +119,7 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
             decoration: const InputDecoration(labelText: 'Profession'),
             items: professions
                 .map((value) =>
-                    DropdownMenuItem(value: value, child: Text(value)))
+                    DropdownMenuItem(value: value, child: Text(tr(value))))
                 .toList(),
             onChanged: (value) =>
                 setState(() => profession = value ?? profession),
@@ -126,10 +127,10 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: salaryRange,
-            decoration: const InputDecoration(labelText: 'Tranche de salaire'),
+            decoration: InputDecoration(labelText: tr('Tranche de salaire')),
             items: salaries
                 .map((value) =>
-                    DropdownMenuItem(value: value, child: Text(value)))
+                    DropdownMenuItem(value: value, child: Text(tr(value))))
                 .toList(),
             onChanged: (value) =>
                 setState(() => salaryRange = value ?? salaryRange),
@@ -137,18 +138,19 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
           const SizedBox(height: 12),
           TextField(
               controller: employerController,
-              decoration: const InputDecoration(labelText: 'Employeur')),
+              decoration: InputDecoration(labelText: tr('Employeur'))),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             value: occupants,
             decoration:
-                const InputDecoration(labelText: 'Nombre de personnes à loger'),
+                InputDecoration(labelText: tr('Nombre de personnes à loger')),
             items: List.generate(
                 8,
                 (index) => DropdownMenuItem(
                     value: index + 1,
-                    child:
-                        Text('${index + 1} personne${index == 0 ? '' : 's'}'))),
+                    child: Text(tr(
+                        index == 0 ? '{count} personne' : '{count} personnes',
+                        {'count': index + 1})))),
             onChanged: (value) =>
                 setState(() => occupants = value ?? occupants),
           ),
@@ -157,17 +159,18 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
             onPressed: _chooseDate,
             icon: const Icon(Icons.event),
             label: Text(startDate == null
-                ? 'Date de début souhaitée'
-                : 'Début souhaité : ${_dateValue(startDate!)}'),
+                ? tr('Date de début souhaitée')
+                : tr('Début souhaité : {date}',
+                    {'date': _dateValue(startDate!)})),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: messageController,
             maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Message au bailleur',
-              hintText:
-                  'Présentez votre projet et ajoutez toute information utile.',
+            decoration: InputDecoration(
+              labelText: tr('Message au bailleur'),
+              hintText: tr(
+                  'Présentez votre projet et ajoutez toute information utile.'),
             ),
           ),
           const SizedBox(height: 20),
@@ -177,7 +180,7 @@ class _InterestRequestPageState extends State<InterestRequestPage> {
                 ? const SizedBox(
                     width: 18, height: 18, child: CircularProgressIndicator())
                 : const Icon(Icons.send),
-            label: Text(sending ? 'Envoi...' : 'Envoyer ma demande'),
+            label: Text(sending ? tr('Envoi...') : tr('Envoyer ma demande')),
           ),
           if (error != null) ...[
             const SizedBox(height: 12),

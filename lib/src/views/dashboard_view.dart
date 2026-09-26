@@ -39,9 +39,9 @@ class TenantDashboardView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader('Biens disponibles',
+        SectionHeader(tr('Biens disponibles'),
             count: availableProperties.length,
-            subtitle: 'Logements et locaux à louer près de chez vous'),
+            subtitle: tr('Logements et locaux à louer près de chez vous')),
         if (onRentalTypeChanged != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
@@ -51,7 +51,7 @@ class TenantDashboardView extends StatelessWidget {
         GroupedPropertyList(
           properties: availableProperties,
           cardBuilder: (property) => PropertyCard(property,
-              tag: 'Disponible',
+              tag: tr('Disponible'),
               endpoint: endpoint,
               token: token,
               openRequest: dashboard.openRequestFor(property.id),
@@ -73,7 +73,7 @@ class SummaryRow extends StatelessWidget {
       children: [
         Expanded(
           child: MetricChip(
-            label: 'Biens',
+            label: tr('Biens'),
             value: '${dashboard.publicProperties.length}',
             icon: Icons.home,
           ),
@@ -81,7 +81,7 @@ class SummaryRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: MetricChip(
-            label: 'Loués',
+            label: tr('Loués'),
             value: '${dashboard.tenantProperties.length}',
             icon: Icons.key,
           ),
@@ -89,7 +89,7 @@ class SummaryRow extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: MetricChip(
-            label: 'Paiements',
+            label: tr('Paiements'),
             value: '${dashboard.payments.length}',
             icon: Icons.receipt_long,
           ),
@@ -116,7 +116,7 @@ class MetricChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: IvoryColors.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: IvoryColors.border),
       ),
@@ -134,14 +134,14 @@ class MetricChip extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(value,
-              style: const TextStyle(
+              style: TextStyle(
                   fontWeight: FontWeight.w900,
                   fontSize: 20,
                   color: IvoryColors.ink)),
           Text(label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: IvoryColors.muted)),
+              style: TextStyle(fontSize: 12, color: IvoryColors.muted)),
         ],
       ),
     );
@@ -157,16 +157,15 @@ class ProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: const Color(0xFFFFF3E6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      color: IvoryColors.orange.withOpacity(0.1),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 28,
-              backgroundColor: Color(0xFFFF8C00),
-              child: Icon(Icons.person, color: Colors.white),
+              backgroundColor: IvoryColors.orange,
+              child: Icon(Icons.person, color: IvoryColors.onAccent),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -180,21 +179,22 @@ class ProfileCard extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 4),
-                  Text(role, style: const TextStyle(color: Colors.black54)),
+                  Text(role, style: TextStyle(color: IvoryColors.muted)),
                 ],
               ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: IvoryColors.surface,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.verified, size: 16, color: Color(0xFFFF8C00)),
-                  SizedBox(width: 4),
-                  Text('Actif', style: TextStyle(fontWeight: FontWeight.w700)),
+                  Icon(Icons.verified, size: 16, color: IvoryColors.orange),
+                  const SizedBox(width: 4),
+                  Text(tr('Actif'),
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
                 ],
               ),
             ),

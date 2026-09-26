@@ -82,10 +82,10 @@ class _TenantHomePageState extends State<TenantHomePage>
         selectedIndex: tab,
         onDestinationSelected: (index) => setState(() => tab = index),
         destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.travel_explore_outlined),
-            selectedIcon: Icon(Icons.travel_explore),
-            label: 'Explorer',
+          NavigationDestination(
+            icon: const Icon(Icons.travel_explore_outlined),
+            selectedIcon: const Icon(Icons.travel_explore),
+            label: tr('Explorer'),
           ),
           NavigationDestination(
             icon: Badge.count(
@@ -96,17 +96,17 @@ class _TenantHomePageState extends State<TenantHomePage>
                 count: unread,
                 isLabelVisible: unread > 0,
                 child: const Icon(Icons.person)),
-            label: 'Mon espace',
+            label: tr('Mon espace'),
           ),
         ],
       ),
       body: Column(
         children: [
           AppHeader(
-            title: onMySpace ? 'Mon espace' : 'Immoizi',
+            title: onMySpace ? tr('Mon espace') : 'Immoizi',
             subtitle: onMySpace
-                ? 'Suivi, paiements et actions locataires'
-                : 'Recherche & espace locataire',
+                ? tr('Suivi, paiements et actions locataires')
+                : tr('Recherche & espace locataire'),
             icon: onMySpace ? Icons.person : Icons.real_estate_agent,
             connected: connected,
             online: online,
@@ -203,15 +203,15 @@ class _TenantHomePageState extends State<TenantHomePage>
                 dashboard.notifications.firstWhere((item) => !item.isRead))),
       const SizedBox(height: 12),
       CategorySection(
-          title: 'Mes biens loués',
+          title: tr('Mes biens loués'),
           icon: Icons.key,
           count: dashboard.tenantProperties.length,
           children: dashboard.tenantProperties
               .map((property) => PropertyCard(property,
-                  tag: 'Loué', endpoint: endpointValue, token: tokenValue))
+                  tag: tr('Loué'), endpoint: endpointValue, token: tokenValue))
               .toList()),
       CategorySection(
-          title: 'Paiements',
+          title: tr('Paiements'),
           icon: Icons.receipt_long,
           count: dashboard.payments.length,
           children: dashboard.payments.map(PaymentTile.new).toList()),
@@ -243,13 +243,15 @@ class _TenantHomePageState extends State<TenantHomePage>
                   NotificationTile(item, onTap: () => _openNotification(item)))
               .toList()),
       CategorySection(
-          title: "Mes demandes d'intérêt",
+          title: tr("Mes demandes d'intérêt"),
           icon: Icons.forum_outlined,
           count: dashboard.interestRequests.length,
           children: dashboard.interestRequests
               .map((item) => InterestRequestTile(item,
                   endpoint: endpointValue, token: tokenValue))
               .toList()),
+      const SizedBox(height: 4),
+      const PreferencesCard(),
     ];
   }
 

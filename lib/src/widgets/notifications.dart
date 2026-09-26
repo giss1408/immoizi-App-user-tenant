@@ -12,10 +12,9 @@ class TenantUnreadNotificationBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        color: const Color(0xFFFFF4E5),
+        color: IvoryColors.orange.withOpacity(0.1),
         child: ListTile(
-          leading:
-              const Icon(Icons.mark_email_unread, color: IvoryColors.orange),
+          leading: Icon(Icons.mark_email_unread, color: IvoryColors.orange),
           title: Text(notification.title,
               style: const TextStyle(fontWeight: FontWeight.w800)),
           subtitle: Text(
@@ -56,7 +55,7 @@ class NotificationTile extends StatelessWidget {
           onTap: onTap,
           trailing: notification.isRead
               ? null
-              : const Icon(Icons.circle, size: 10, color: IvoryColors.orange),
+              : Icon(Icons.circle, size: 10, color: IvoryColors.orange),
         ),
       );
 }

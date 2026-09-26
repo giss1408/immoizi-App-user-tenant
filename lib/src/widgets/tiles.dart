@@ -11,7 +11,7 @@ class PaymentTile extends StatelessWidget {
   Widget build(BuildContext context) => InfoTile(
         icon: Icons.payments,
         title: '${payment.amount} FCFA',
-        subtitle: 'Échéance ${payment.dueDate}',
+        subtitle: tr('Échéance {date}', {'date': payment.dueDate}),
         trailing: payment.status,
       );
 }

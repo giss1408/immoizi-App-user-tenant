@@ -31,7 +31,7 @@ class InterestRequestTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: const Icon(Icons.forum_outlined, color: IvoryColors.green),
+        leading: Icon(Icons.forum_outlined, color: IvoryColors.green),
         title: Text(request.propertyTitle,
             style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text(

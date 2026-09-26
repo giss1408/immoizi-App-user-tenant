@@ -21,9 +21,9 @@ class CreateMaintenanceCard extends StatelessWidget {
     return Card(
       color: IvoryColors.green.withOpacity(0.08),
       child: ListTile(
-        leading: const Icon(Icons.add_task, color: IvoryColors.green),
-        title: const Text('Signaler un problème'),
-        subtitle: const Text('Créer une demande de maintenance'),
+        leading: Icon(Icons.add_task, color: IvoryColors.green),
+        title: Text(tr('Signaler un problème')),
+        subtitle: Text(tr('Créer une demande de maintenance')),
         onTap:
             token.isEmpty || properties.every((property) => property.id == null)
                 ? null
@@ -79,7 +79,7 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
         titleController.text.trim().isEmpty ||
         descriptionController.text.trim().isEmpty) {
       setState(() => error =
-          'Choisissez un bien et renseignez le sujet et la description.');
+          tr('Choisissez un bien et renseignez le sujet et la description.'));
       return;
     }
     setState(() {
@@ -101,7 +101,8 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
       widget.onSubmitted();
       if (mounted) Navigator.of(context).pop();
     } catch (exception) {
-      setState(() => error = 'Envoi impossible : ${describeError(exception)}');
+      setState(() => error = tr(
+          'Envoi impossible : {error}', {'error': describeError(exception)}));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -110,13 +111,13 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Signaler un problème')),
+      appBar: AppBar(title: Text(tr('Signaler un problème'))),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           DropdownButtonFormField<String>(
             value: propertyId,
-            decoration: const InputDecoration(labelText: 'Bien concerné'),
+            decoration: InputDecoration(labelText: tr('Bien concerné')),
             items: widget.properties
                 .where((property) => property.id != null)
                 .map((property) => DropdownMenuItem(
@@ -127,27 +128,27 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
           const SizedBox(height: 12),
           TextField(
             controller: titleController,
-            decoration: const InputDecoration(
-                labelText: 'Sujet du problème',
-                hintText: 'Ex. Fuite sous évier'),
+            decoration: InputDecoration(
+                labelText: tr('Sujet du problème'),
+                hintText: tr('Ex. Fuite sous évier')),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: descriptionController,
             maxLines: 6,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
                 labelText: 'Description',
-                hintText: 'Décrivez le problème et sa localisation'),
+                hintText: tr('Décrivez le problème et sa localisation')),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: priority,
-            decoration: const InputDecoration(labelText: 'Priorité'),
-            items: const [
-              DropdownMenuItem(value: 'low', child: Text('Faible')),
-              DropdownMenuItem(value: 'normal', child: Text('Normale')),
-              DropdownMenuItem(value: 'high', child: Text('Haute')),
-              DropdownMenuItem(value: 'urgent', child: Text('Urgente')),
+            decoration: InputDecoration(labelText: tr('Priorité')),
+            items: [
+              DropdownMenuItem(value: 'low', child: Text(tr('Faible'))),
+              DropdownMenuItem(value: 'normal', child: Text(tr('Normale'))),
+              DropdownMenuItem(value: 'high', child: Text(tr('Haute'))),
+              DropdownMenuItem(value: 'urgent', child: Text(tr('Urgente'))),
             ],
             onChanged: (value) => setState(() => priority = value ?? priority),
           ),
@@ -158,7 +159,7 @@ class _CreateMaintenancePageState extends State<CreateMaintenancePage> {
                 ? const SizedBox(
                     width: 18, height: 18, child: CircularProgressIndicator())
                 : const Icon(Icons.send),
-            label: Text(saving ? 'Envoi...' : 'Envoyer la demande'),
+            label: Text(saving ? tr('Envoi...') : tr('Envoyer la demande')),
           ),
           if (error != null) ...[
             const SizedBox(height: 12),
