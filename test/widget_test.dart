@@ -4,29 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:immoizi_app_user_tenant/main.dart';
-import 'package:immoizi_core/immoizi_core.dart';
+import 'package:immoizi_core/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-/// Records requests and answers with [handler].
-class FakeBackend {
-  FakeBackend(this.handler);
-
-  final http.Response Function(Map<String, dynamic> body, http.Request request)
-      handler;
-  final requests = <http.Request>[];
-
-  GraphQLClient get client =>
-      GraphQLClient(httpClient: MockClient((request) async {
-        requests.add(request);
-        return handler(
-            jsonDecode(request.body) as Map<String, dynamic>, request);
-      }));
-}
-
-http.Response _json(Object body) => http.Response(jsonEncode(body), 200,
-    headers: {'content-type': 'application/json; charset=utf-8'});
 
 Map<String, dynamic> _dashboard(
         {String title = 'Villa Riviera',
@@ -81,13 +61,13 @@ void main() {
       final query = body['query'] as String;
       if (!request.headers.containsKey('Authorization') &&
           query.contains('myTenant')) {
-        return _json({
+        return jsonResponse({
           'errors': [
             {'message': "L'authentification est obligatoire."}
           ]
         });
       }
-      return _json({'data': _dashboard()});
+      return jsonResponse({'data': _dashboard()});
     });
     await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
     await tester.pumpAndSettle();
@@ -104,7 +84,8 @@ void main() {
       'tenant_username': 'nadia',
       'tenant_endpoint': 'http://backend.test/graphql',
     });
-    final backend = FakeBackend((_, __) => _json({'data': _dashboard()}));
+    final backend =
+        FakeBackend((_, __) => jsonResponse({'data': _dashboard()}));
     await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
     await tester.pumpAndSettle();
 
@@ -116,7 +97,7 @@ void main() {
 
   testWidgets('an expired token signs the user out', (tester) async {
     FlutterSecureStorage.setMockInitialValues({'tenant_token': 'expired'});
-    final backend = FakeBackend((_, __) => _json({
+    final backend = FakeBackend((_, __) => jsonResponse({
           'errors': [
             {'message': "L'authentification est obligatoire."}
           ]
@@ -134,13 +115,15 @@ void main() {
       (tester) async {
     final backend = FakeBackend((body, _) {
       final search = (body['variables'] as Map)['search'];
-      return _json({
+      return jsonResponse({
         'data': _dashboard(title: search == null ? 'Villa Riviera' : 'Studio')
       });
     });
     await tester.pumpWidget(ImmoiziUserTenantApp(client: backend.client));
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'studio');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
@@ -158,7 +141,7 @@ void main() {
     addTearDown(tester.view.reset);
     final backend = FakeBackend((body, _) {
       final rentalType = (body['variables'] as Map)['rentalType'];
-      return _json({
+      return jsonResponse({
         'data': rentalType == 'short_term'
             ? _dashboard(
                 title: 'Appartement meublé Riviera',

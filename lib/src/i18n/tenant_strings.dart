@@ -18,7 +18,6 @@ const tenantEnglish = <String, String>{
   'Date de début souhaitée': 'Desired start date',
   'Demande envoyée': 'Request sent',
   'Demande envoyée le {date}': 'Request sent on {date}',
-  'Disponible': 'Available',
   'Début souhaité : {date}': 'Desired start: {date}',
   'Décrivez le problème et sa localisation':
       'Describe the problem and where it is',
@@ -29,7 +28,6 @@ const tenantEnglish = <String, String>{
   'En attente de la réponse du bailleur. Vous pourrez envoyer une nouvelle demande après sa réponse, ou à partir du {date}.':
       'Waiting for the landlord\'s reply. You can send a new request after their reply, or from {date}.',
   'Entrepreneur': 'Entrepreneur',
-  'Envoi impossible : {error}': 'Unable to send: {error}',
   'Envoi...': 'Sending...',
   'Envoyer la demande': 'Send the request',
   'Envoyer ma demande': 'Send my request',
@@ -43,13 +41,11 @@ const tenantEnglish = <String, String>{
   'Je suis intéressé par ce bien': 'I\'m interested in this property',
   'Logements et locaux à louer près de chez vous':
       'Homes and premises for rent near you',
-  'Loué': 'Rented',
   'Loués': 'Rented',
   'Mes biens loués': 'My rented properties',
   'Mes demandes d\'intérêt': 'My interest requests',
   'Message au bailleur': 'Message to the landlord',
   'Moins de 200 000 FCFA': 'Less than 200,000 FCFA',
-  'Mon espace': 'My space',
   'Nombre de personnes à loger': 'Number of people to house',
   'Normale': 'Normal',
   'Paiements': 'Payments',
@@ -65,12 +61,10 @@ const tenantEnglish = <String, String>{
   'Sujet du problème': 'Problem subject',
   'Tranche de salaire': 'Salary range',
   'Urgente': 'Urgent',
-  'Vidéo disponible': 'Video available',
   'Votre demande a été envoyée au bailleur.':
       'Your request has been sent to the landlord.',
   '{count} personne': '{count} person',
   '{count} personnes': '{count} people',
-  '{count} pièces': '{count} rooms',
   'Échéance {date}': 'Due {date}',
   'Étudiant': 'Student',
 };

@@ -173,32 +173,6 @@ class Maintenance {
       );
 }
 
-class NotificationItem {
-  NotificationItem(
-      this.id, this.title, this.message, this.propertyTitle, this.isRead,
-      {this.interestRequestId});
-
-  /// Set when the notification is about an interest request.
-  final String? interestRequestId;
-
-  final String id;
-  final String title;
-  final String message;
-  final String propertyTitle;
-  final bool isRead;
-
-  factory NotificationItem.fromJson(Map<String, dynamic> json) =>
-      NotificationItem(
-        json['id'] as String? ?? '',
-        json['title'] as String? ?? 'Notification',
-        json['message'] as String? ?? '',
-        nestedTitle(json['property']),
-        json['isRead'] as bool? ?? false,
-        interestRequestId: (json['interestRequest']
-            as Map<String, dynamic>?)?['id'] as String?,
-      );
-}
-
 class InterestRequestItem {
   InterestRequestItem(this.id, this.propertyTitle, this.status,
       {this.propertyId,
