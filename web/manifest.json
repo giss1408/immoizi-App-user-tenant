@@ -1,11 +1,11 @@
 {
-    "name": "immoizi_app_user_tenant",
-    "short_name": "immoizi_app_user_tenant",
+    "name": "Immoizi",
+    "short_name": "Immoizi",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FF8200",
+    "theme_color": "#FF8200",
+    "description": "Immoizi: find and rent properties.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
